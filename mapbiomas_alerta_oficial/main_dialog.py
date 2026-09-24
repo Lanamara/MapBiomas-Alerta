@@ -2296,6 +2296,9 @@ class MapBiomasAlertDockWidget(QDockWidget):
         self.car_scope_note_label = QLabel(ALERT_IN_PROPERTY_NOTE)
         self.car_scope_note_label.setWordWrap(True)
         self.car_scope_note_label.setObjectName("informationLabel")
+        self.car_scope_note_label.setStyleSheet(
+            "color: #C0392B; font-weight: 700;"
+        )
         self.register_translatable(
             self.car_scope_note_label, ALERT_IN_PROPERTY_NOTE
         )
@@ -10293,6 +10296,7 @@ class MapBiomasAlertDockWidget(QDockWidget):
         scope_note = QLabel(self.tr(ALERT_IN_PROPERTY_NOTE))
         scope_note.setWordWrap(True)
         scope_note.setObjectName("informationLabel")
+        scope_note.setStyleSheet("color: #C0392B; font-weight: 700;")
         self.same_property_layout.addWidget(scope_note)
 
         total_alerts = sum(len(group["alerts"]) for group in groups)
