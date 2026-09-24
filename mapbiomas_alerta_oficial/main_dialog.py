@@ -9790,7 +9790,7 @@ class MapBiomasAlertDockWidget(QDockWidget):
         ]
         if property_codes:
             self.crossed_properties_label.setText(
-                "<b>{}</b><br>{}<br><i>{}</i>".format(
+                "<b>{}</b><br>{}<br><b style=\"color:#C0392B;\">{}</b>".format(
                     self.tr(
                         "{} imóvel(is) cruzado(s)", len(property_codes)
                     ),
