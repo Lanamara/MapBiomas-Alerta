@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Account or data questions
+    url: mailto:suporte.alerta@mapbiomas.org
+    about: Questions about your MapBiomas Alerta account or about the alert data.

@@ -1,0 +1,29 @@
+[general]
+name=MapBiomas Alerta Oficial
+qgisMinimumVersion=3.22
+qgisMaximumVersion=4.99
+description=Search, analyze and export MapBiomas Alerta deforestation alerts inside QGIS, using the official MapBiomas Alerta API.
+about=Official QGIS plugin of MapBiomas Alerta. It connects to the MapBiomas Alerta GraphQL API (v2) with the user's own platform account and brings validated deforestation alerts into QGIS for Brazil, Bolivia, Colombia, Peru and Indonesia.
+    Features: search by whole country, biome, vector layer, point coordinate, alert code or (Brazil) rural property CAR code; filter by detection or publication period, minimum area, detection sources and territorial crossings; summary statistics; bar, pie and line charts; per-alert details with before/after satellite images and a link to the full report; export to CSV, XLSX, GeoPackage, Shapefile and PNG.
+    Interface in Portuguese, Spanish and English. Requires internet access and a free account on the MapBiomas Alerta platform of the chosen country. Step-by-step user guides for each country are available in the repository (docs folder).
+version=1.0.0
+author=Lana Teixeira, Glauco Munsberg (MapBiomas)
+email=suporte.alerta@mapbiomas.org
+changelog=1.0.0 (2026-09)
+    - First public release in the QGIS Plugin Repository.
+    - Brazil, Bolivia, Colombia, Peru and Indonesia; interface in Portuguese, Spanish and English.
+    - Areas of interest: whole country, biome, vector layer, coordinate, alert code and CAR (Brazil).
+    - Filters by period, minimum area, sources and territorial crossings.
+    - Summary cards, statistical analysis and bar, pie and line charts with an enlarged view.
+    - Alert details with before/after images and link to the platform report.
+    - Exports: attribute table (CSV/XLSX), layer (GPKG/SHP), chart (PNG), chart alerts (CSV/GPKG/SHP) and summary (XLSX).
+repository=https://github.com/mapbiomas/alert_QGIS_plugin
+tracker=https://github.com/mapbiomas/alert_QGIS_plugin/issues
+homepage=https://github.com/mapbiomas/alert_QGIS_plugin
+category=Web
+tags=MapBiomas,deforestation,desmatamento,deforestacion,alerts,monitoring,land use,vegetation,Brazil,Bolivia,Colombia,Peru,Indonesia,API
+icon=icon.png
+experimental=False
+deprecated=False
+hasProcessingProvider=False
+server=False

@@ -1,0 +1,47 @@
+# Checks the plugin and builds the ZIP on every push and pull request.
+# When a tag like v1.0.0 is pushed, the ZIP is attached to a GitHub release.
+name: Check and package
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install checkers
+        run: pip install pyflakes bandit
+
+      - name: Lint (pyflakes)
+        run: python -m pyflakes mapbiomas_alerta_oficial scripts
+
+      - name: Security scan (bandit)
+        run: python -m bandit -q -r mapbiomas_alerta_oficial scripts
+
+      - name: Build plugin ZIP
+        run: python scripts/package_plugin.py
+
+      - name: Upload ZIP as build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-zip
+          path: dist/*.zip
+
+      - name: Attach ZIP to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          generate_release_notes: true
