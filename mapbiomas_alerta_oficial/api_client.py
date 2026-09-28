@@ -13,6 +13,8 @@ from qgis.PyQt.QtCore import QEventLoop, QTimer, QUrl
 from qgis.PyQt.QtNetwork import QNetworkRequest
 from qgis.core import Qgis, QgsGeometry, QgsMessageLog, QgsNetworkAccessManager
 
+from .country_config import intersection_group_fields
+
 
 class ApiAuthenticationError(RuntimeError):
     pass
@@ -239,18 +241,13 @@ class MapBiomasApiClient:
         "permanentProtectedAreasCount": "crossedPermanentProtectedArea",
     }
 
-    # Superset of CROSSING_AVAILABILITY_COUNTS: every count field in
-    # QuerySummary that ALERTS_SUMMARY_QUERY used to request
-    # unconditionally before this fix. actionsCount/riverSourcesCount
-    # aren't crossing categories (not in
-    # CROSSING_AVAILABILITY_COUNTS), but are likewise counters that may
-    # not exist outside Brazil — just ONE missing was enough to fail the
-    # whole query with a GraphQL error. See supported_summary_fields().
-    SUMMARY_COUNT_FIELDS = tuple(CROSSING_AVAILABILITY_COUNTS) + (
-        # authorizedAreasCount intentionally not requested: authorizations
-        # (like embargoes) are only shown in the platform's alert report.
-        "riverSourcesCount",  # actionsCount: shown only in the report
-    )
+    # Every count field in QuerySummary requested by ALERTS_SUMMARY_QUERY.
+    # Counters may not exist outside Brazil — just ONE missing was enough
+    # to fail the whole query with a GraphQL error. See
+    # supported_summary_fields(). Not requested: authorizedAreasCount and
+    # actionsCount (like embargoes, only shown in the platform's alert
+    # report) and riverSourcesCount (river sources aren't shown).
+    SUMMARY_COUNT_FIELDS = tuple(CROSSING_AVAILABILITY_COUNTS)
 
     def supported_summary_fields(self):
         """Introspects the QuerySummary schema (type of the "summary" field
@@ -313,6 +310,22 @@ class MapBiomasApiClient:
             )
         return self._supported_summary_fields or []
 
+    def intersection_label(self, entry):
+        return self.intersection_label_for(
+            entry, self.country.get("intersection_labels")
+        )
+
+    @staticmethod
+    def intersection_label_for(entry, labels):
+        """Label of an alertIntersections entry. Outside Brazil the API's
+        "name" is the data source (e.g. "IBC", "SERNANP"), so the label
+        comes from the country's own table (intersection_labels in
+        country_config.py), falling back to the type key."""
+        type_key = str(entry.get("type") or "").strip()
+        if labels is not None:
+            return labels.get(type_key) or type_key
+        return str(entry.get("name") or type_key).strip()
+
     def discover_intersection_types(self, sample_size=300):
         """Samples a real set of alerts (wide date range, no crossing
         filter) and collects which crossing types (alertIntersections)
@@ -369,8 +382,9 @@ class MapBiomasApiClient:
                     total_area = entry.get("totalAreaHa")
                     if total_area in (None, 0, 0.0):
                         continue
-                    label = str(entry.get("name") or type_key)
-                    collected.setdefault(str(type_key), label)
+                    collected.setdefault(
+                        str(type_key), self.intersection_label(entry)
+                    )
             self._discovered_intersection_types = sorted(
                 collected.items(), key=lambda item: item[1]
             )
@@ -1085,7 +1099,8 @@ class MapBiomasApiClient:
                 filtered_batch = unique_batch
             filtered_feature_count += len(filtered_batch)
             page_document, page_skipped_codes = self.to_geojson(
-                filtered_batch, period_type, return_stats=True
+                filtered_batch, period_type, return_stats=True,
+                intersection_labels=self.country.get("intersection_labels"),
             )
             features.extend(page_document.get("features") or [])
             skipped_geometry_codes.extend(page_skipped_codes)
@@ -1588,11 +1603,15 @@ class MapBiomasApiClient:
                     data.get("__type", {}).get("fields") or []
                 )
             }
+            # The schema is the same in every country, so Brazil-only
+            # categories (see country_config.BRAZIL_ONLY_ANALYTIC_FIELDS)
+            # are left out elsewhere instead of becoming empty columns.
+            excluded = set(self.country.get("analytic_fields_exclude") or ())
             self._supported_analytic_fields = [
                 field for field in (
                     list(self.ANALYTIC_FIELDS) + list(self.AREA_MAP_FIELDS)
                 )
-                if field in available
+                if field in available and field not in excluded
             ]
             # alertIntersections is the new, unified field the API itself
             # recommends using in place of the crossed* fields (marked as
@@ -1887,10 +1906,63 @@ class MapBiomasApiClient:
                 reply.abort()
 
     @staticmethod
+    def add_intersection_group_columns(properties, entries, labels):
+        """One set of columns per crossing type of the country (see
+        country_config.intersection_group_fields): names crossed
+        (Cz01), total crossed area (Cz01Area) and the area inside each
+        territory (Cz01Areas, JSON) — the same layout as Brazil's legacy
+        fields (TerraIndig/TIAreaHa/TerraIndigAreas), so charts, the
+        specific-value list and the exports handle them the same way."""
+        if not labels:
+            return
+        by_type = {}
+        for entry in entries or []:
+            by_type.setdefault(str(entry.get("type") or ""), []).append(entry)
+        for type_key, field, _label in intersection_group_fields(labels):
+            names = []
+            areas = {}
+            total = 0.0
+            for entry in by_type.get(type_key, []):
+                try:
+                    total += float(entry.get("totalAreaHa") or 0)
+                except (TypeError, ValueError):
+                    pass
+                for unit in entry.get("units") or []:
+                    name = str(unit.get("name") or "").strip()
+                    if not name:
+                        continue
+                    try:
+                        area = float(
+                            unit.get("crossAreaHa")
+                            if unit.get("crossAreaHa") is not None
+                            else unit.get("areaHa") or 0
+                        )
+                    except (TypeError, ValueError):
+                        area = 0.0
+                    areas[name] = areas.get(name, 0.0) + area
+                    if name not in names:
+                        names.append(name)
+                for name in entry.get("names") or []:
+                    name = str(name or "").strip()
+                    if name and name not in names:
+                        names.append(name)
+            if not names and total <= 0:
+                continue
+            if not areas and len(names) == 1 and total > 0:
+                areas = {names[0]: total}
+            properties[field] = "; ".join(names)
+            properties["{}Area".format(field)] = total
+            if areas:
+                properties["{}Areas".format(field)] = json.dumps(
+                    areas, ensure_ascii=False, separators=(",", ":"),
+                )
+
+    @staticmethod
     def to_geojson(
         alerts,
         period_type=PERIOD_DETECTION,
         return_stats=False,
+        intersection_labels=None,
     ):
         features = []
         skipped_geometry_codes = []
@@ -2128,7 +2200,9 @@ class MapBiomasApiClient:
                     [
                         {
                             "type": entry.get("type"),
-                            "name": entry.get("name"),
+                            "name": MapBiomasApiClient.intersection_label_for(
+                                entry, intersection_labels
+                            ),
                             "totalAreaHa": entry.get("totalAreaHa"),
                             "names": entry.get("names") or [],
                         }
@@ -2138,6 +2212,9 @@ class MapBiomasApiClient:
                     ],
                     ensure_ascii=False,
                     separators=(",", ":"),
+                )
+                MapBiomasApiClient.add_intersection_group_columns(
+                    properties, alert_intersections, intersection_labels
                 )
             features.append(
                 {

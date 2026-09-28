@@ -121,7 +121,13 @@ from .api_client import (
     MapBiomasApiClient,
     QueryCancelledError,
 )
-from .country_config import country_config, country_items
+from .country_config import (
+    HIDDEN_INTERSECTION_HINTS,
+    INTERSECTION_CONTEXT_TYPES,
+    intersection_group_fields,
+    country_config,
+    country_items,
+)
 from .translations import (
     LANGUAGES,
     DEFAULT_LANGUAGE_BY_COUNTRY,
@@ -144,6 +150,31 @@ ALERT_IN_PROPERTY_NOTE = (
     "apenas a parte do alerta dentro do imóvel. Para ver a área do "
     "alerta dentro do imóvel, abra o laudo na plataforma."
 )
+SAME_PROPERTY_COUNT_NOTE = (
+    "Atenção: este número soma os alertas de todos os imóveis cruzados, "
+    "de qualquer data, e não apenas os do período da busca. Imóveis "
+    "grandes podem ter muitos alertas. Confira abaixo quantos alertas "
+    "cada imóvel tem (o total inclui o alerta selecionado)."
+)
+CAR_CODE_HELP = (
+    "Busca todos os alertas vinculados ao imóvel rural, "
+    "usando o código de cadastro (CAR/SICAR) no padrão "
+    "UF-0000000-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX (ex.: "
+    "PE-2610905-7821EE203D0441D699AA58725AC25249). "
+    "Segundo a documentação oficial da API, essa busca só "
+    "retorna resultado para imóveis que já têm pelo menos "
+    "um alerta — um código válido mas sem nenhum alerta "
+    "não gera erro, só não aparece nada."
+)
+# Colombia (Catastro Rural): the ruralProperty query takes the 30-digit
+# Número Predial Nacional.
+CADASTRE_CODE_HELP = (
+    "Busca todos os alertas vinculados ao predio do Catastro Rural, "
+    "usando o Número Predial Nacional de 30 dígitos (ex.: "
+    "851250001000000140014000000000). Essa busca só retorna resultado "
+    "para predios que já têm pelo menos um alerta — um número válido mas"
+    " sem nenhum alerta não gera erro, só não aparece nada."
+)
 QUICK_VIEW_HELP = (
     "Mostra os alertas no mapa direto do servidor da plataforma, com as "
     "estatísticas da API, sem baixar os polígonos. Os polígonos só são "
@@ -152,11 +183,11 @@ QUICK_VIEW_HELP = (
     "cruzamento, a busca baixa os polígonos direto."
 )
 SUMMARY_NOTICE = (
-    "Este resumo varia de acordo com os filtros selecionados. Com filtro "
-    "de fonte ou de cruzamento, o resumo oficial da plataforma não "
-    "corresponde ao que é baixado: os números passam a ser calculados a "
-    "partir da camada, e média diária, maior velocidade e sobreposições "
-    "ficam indisponíveis."
+    "Este resumo varia de acordo com os filtros selecionados. Quando a "
+    "plataforma não consegue aplicar o mesmo filtro (cruzamento, camada "
+    "vetorial, coordenada, ou mais de uma fonte com a regra Todas "
+    "selecionadas juntas ou Combinação exata), alguns números passam a "
+    "ser calculados a partir da camada e outros ficam indisponíveis."
 )
 NOT_SHOWN_CROSSINGS_NOTE = (
     "Cruzamentos com embargos, autorizações e ações de fiscalização não "
@@ -195,6 +226,31 @@ TERRITORIAL_AREA_GROUPS = {
     ),
     "usoestsust": ("UsoEstSust", "UsoEstSustAreas", {"usoestsustarea"}),
 }
+
+# Per-country crossing columns (Cz01, Cz01Area, Cz01Areas…) written by
+# MapBiomasApiClient.add_intersection_group_columns outside Brazil. Their
+# TERRITORIAL_AREA_GROUPS entries depend on the connected country and are
+# registered by register_intersection_groups().
+INTERSECTION_GROUP_KEYS = frozenset("cz%02d" % index for index in range(1, 61))
+INTERSECTION_AREA_KEYS = frozenset(
+    "{}area".format(key) for key in INTERSECTION_GROUP_KEYS
+)
+
+# Crossings left out of "Campo para comparar" (decided with the MapBiomas
+# Alerta team): forest management, geoparks, APP and Legal Reserve.
+HIDDEN_CHART_GROUPS = frozenset(
+    ("manflorest", "geoparque", "app", "reservalegal")
+)
+# Their numeric fields are left out of "Campo numérico" as well.
+HIDDEN_CHART_NUMERIC = frozenset((
+    "manflorarea", "geoparquearea", "appareaha", "appqtd", "rlareaha",
+    "rlqtd",
+))
+
+
+def is_hidden_intersection(type_key, label):
+    text = "{} {}".format(type_key or "", label or "").upper()
+    return any(hint.upper() in text for hint in HIDDEN_INTERSECTION_HINTS)
 
 ATTRIBUTE_FIELD_ALIASES = {
     "Assentamento": "Assentamentos cruzados (separados por ;)",
@@ -665,11 +721,7 @@ class BarChartWidget(QLabel):
         "#c9503a", "#f0a05a", "#8fae5d", "#2f5d73", "#a98bc2",
         "#e38fa9", "#b59b7a", "#3f8f8a", "#d9c46a", "#5c4633",
     )
-    OTHERS_COLOR = "#9AA19C"
-
     def slice_color(self, index, label):
-        if str(label).startswith(("Outros", "Otros", "Others")):
-            return QColor(self.OTHERS_COLOR)
         return QColor(self.COLORS[index % len(self.COLORS)])
 
     def __init__(self, parent=None):
@@ -1199,6 +1251,79 @@ class MapBiomasAlertDockWidget(QDockWidget):
             (widget, text, setter, format_args, transform)
         )
         return widget
+
+    def retarget_translatable(self, widget, text, setter="setText"):
+        """Changes the Portuguese key of a widget already registered with
+        register_translatable (e.g. texts that depend on the country) and
+        applies it, so later language switches keep the new text."""
+        for index, entry in enumerate(self._translatable_widgets):
+            if entry[0] is widget and entry[2] == setter:
+                _widget, _text, _setter, format_args, transform = entry
+                self._translatable_widgets[index] = (
+                    widget, text, setter, format_args, transform
+                )
+                translated = self.tr(text, *format_args)
+                if transform is not None:
+                    translated = transform(translated)
+                getattr(widget, setter)(translated)
+                return
+        self.register_translatable(widget, text, setter)
+
+    def shows_embargo_note(self):
+        """The "embargoes/authorizations: check the report" note only makes
+        sense where those crossings exist (Brazil)."""
+        return bool(self.api_client.country.get("has_embargo_crossings"))
+
+    def uses_cadastre_code(self):
+        """True for countries whose rural property search takes a
+        national cadastre number instead of Brazil's CAR code
+        (Colombia's Catastro Rural)."""
+        return bool(
+            self.api_client.country.get("rural_property_code_pattern")
+        )
+
+    def update_rural_property_texts(self):
+        if not hasattr(self, "car_code_field_label"):
+            return
+        if self.uses_cadastre_code():
+            texts = (
+                (self.area_car_radio, "Catastro Rural", "setText"),
+                (
+                    self.area_car_radio,
+                    "Buscar por predio do Catastro Rural",
+                    "setToolTip",
+                ),
+                (self.car_code_field_label, "Número predial", "setText"),
+                (
+                    self.car_code_edit,
+                    "Número Predial Nacional completo (30 dígitos)",
+                    "setPlaceholderText",
+                ),
+            )
+            help_text = CADASTRE_CODE_HELP
+        else:
+            texts = (
+                (self.area_car_radio, "Imóvel rural (CAR)", "setText"),
+                (
+                    self.area_car_radio,
+                    "Buscar por imóvel rural (CAR)",
+                    "setToolTip",
+                ),
+                (self.car_code_field_label, "Código do CAR", "setText"),
+                (
+                    self.car_code_edit,
+                    "Código completo do CAR/SICAR",
+                    "setPlaceholderText",
+                ),
+            )
+            help_text = CAR_CODE_HELP
+        for widget, text, setter in texts:
+            self.retarget_translatable(widget, text, setter)
+        if self.car_code_help_icon is not None:
+            self.retarget_translatable(
+                self.car_code_help_icon, help_text, "set_help_text"
+            )
+        self.validate_car_code()
 
     def update_top_municipality_title(self):
         if not hasattr(self, "top_municipality_title"):
@@ -2272,22 +2397,15 @@ class MapBiomasAlertDockWidget(QDockWidget):
         )
         car_code_form = QFormLayout()
         self.responsive_forms.append(car_code_form)
-        car_code_field_label = QLabel("Código do CAR")
-        self.register_translatable(car_code_field_label, "Código do CAR")
-        car_code_form.addRow(
-            car_code_field_label,
-            self.create_help_field(
-                self.car_code_edit,
-                "Busca todos os alertas vinculados ao imóvel rural, "
-                "usando o código de cadastro (CAR/SICAR) no padrão "
-                "UF-0000000-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX (ex.: "
-                "PE-2610905-7821EE203D0441D699AA58725AC25249). "
-                "Segundo a documentação oficial da API, essa busca só "
-                "retorna resultado para imóveis que já têm pelo menos "
-                "um alerta — um código válido mas sem nenhum alerta "
-                "não gera erro, só não aparece nada.",
-            ),
+        self.car_code_field_label = QLabel("Código do CAR")
+        self.register_translatable(self.car_code_field_label, "Código do CAR")
+        car_code_field = self.create_help_field(
+            self.car_code_edit, CAR_CODE_HELP
         )
+        # Kept to swap the texts for Colombia's Catastro Rural (see
+        # update_rural_property_texts).
+        self.car_code_help_icon = car_code_field.findChild(HelpIconLabel)
+        car_code_form.addRow(self.car_code_field_label, car_code_field)
         self.car_validation_label = QLabel()
         self.car_validation_label.setWordWrap(True)
         self.car_validation_label.setObjectName("informationLabel")
@@ -3541,19 +3659,24 @@ class MapBiomasAlertDockWidget(QDockWidget):
                 )
             else:
                 overlap_lines.append(html.escape(line))
+        embargo_note = ""
+        if self.shows_embargo_note():
+            embargo_note = (
+                '<br><b style="color:#C0392B; font-size:12px;">{}</b>'.format(
+                    html.escape(
+                        self.tr(
+                            "Embargos, autorizações e ações de "
+                            "fiscalização: consulte o laudo na plataforma."
+                        )
+                    )
+                )
+            )
         cards["overlaps"].setText(
             (
                 "<br>".join(overlap_lines)
                 if overlaps and overlaps != "—" else "—"
             )
-            + '<br><b style="color:#C0392B; font-size:12px;">{}</b>'.format(
-                html.escape(
-                    self.tr(
-                        "Embargos, autorizações e ações de fiscalização: "
-                        "consulte o laudo na plataforma."
-                    )
-                )
-            )
+            + embargo_note
         )
         period = self.period_result_value.text()
         period_type = self.period_type_value.text()
@@ -3654,6 +3777,13 @@ class MapBiomasAlertDockWidget(QDockWidget):
         )
         self.same_crossing_button.setEnabled(False)
         self.same_crossing_button.setVisible(True)
+        self.same_property_note_label = QLabel("")
+        self.same_property_note_label.setObjectName("informationLabel")
+        self.same_property_note_label.setWordWrap(True)
+        self.same_property_note_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        self.same_property_note_label.setVisible(False)
         self.same_crossing_status_label = QLabel("")
         self.same_crossing_status_label.setObjectName("emptyStateLabel")
         self.same_crossing_status_label.setWordWrap(True)
@@ -3754,6 +3884,7 @@ class MapBiomasAlertDockWidget(QDockWidget):
             self.create_information_title("Outros alertas nos mesmos imóveis")
         )
         properties_layout.addWidget(self.same_crossing_button)
+        properties_layout.addWidget(self.same_property_note_label)
         layout.addWidget(properties_card)
         layout.addWidget(self.same_crossing_status_label)
         layout.addWidget(self.close_same_property_button)
@@ -3766,13 +3897,15 @@ class MapBiomasAlertDockWidget(QDockWidget):
         return tab
 
     def initial_intersections_text(self):
-        return (
-            "<b>{}</b><br>{}<br><b style=\"color:#C0392B;\">{}</b>".format(
-                self.tr("Cruzamentos territoriais e ambientais"),
-                self.tr("Selecione um alerta para consultar os cruzamentos."),
-                self.tr(NOT_SHOWN_CROSSINGS_NOTE),
-            )
+        text = "<b>{}</b><br>{}".format(
+            self.tr("Cruzamentos territoriais e ambientais"),
+            self.tr("Selecione um alerta para consultar os cruzamentos."),
         )
+        if self.shows_embargo_note():
+            text += "<br><b style=\"color:#C0392B;\">{}</b>".format(
+                self.tr(NOT_SHOWN_CROSSINGS_NOTE)
+            )
+        return text
 
     def initial_properties_text(self):
         return "{}<br><b style=\"color:#C0392B;\">{}</b>".format(
@@ -4056,6 +4189,18 @@ class MapBiomasAlertDockWidget(QDockWidget):
         self.chart_limit_spin.valueChanged.connect(
             self.mark_chart_configuration_pending
         )
+        # "Valor específico" lists the values of the field chosen to
+        # compare (e.g. the Conservation Units' names), so it's rebuilt as
+        # soon as that field — or anything that changes its values — is
+        # changed, instead of only on APLICAR ANÁLISE. Connected after the
+        # handlers above so it sees the adjusted metric/value combos.
+        for combo in (
+            self.chart_group_combo,
+            self.chart_metric_combo,
+            self.chart_value_combo,
+            self.chart_source_mode_combo,
+        ):
+            combo.currentIndexChanged.connect(self.refresh_chart_categories)
         self.export_chart_button.clicked.connect(
             self.export_chart_png
         )
@@ -4374,15 +4519,40 @@ class MapBiomasAlertDockWidget(QDockWidget):
             .replace("–", "-")
             .replace("—", "-"),
         )
+        cadastre_pattern = self.api_client.country.get(
+            "rural_property_code_pattern"
+        )
         if not code:
             if show_empty:
                 self.car_validation_label.setText(
-                    self.tr("Informe o código do imóvel rural.")
+                    self.tr(
+                        "Informe o número predial."
+                        if cadastre_pattern
+                        else "Informe o código do imóvel rural."
+                    )
                 )
             else:
                 self.car_validation_label.clear()
             self.car_code_edit.setStyleSheet("")
             return not show_empty
+        if cadastre_pattern:
+            valid = bool(re.fullmatch(cadastre_pattern, code))
+            if valid and code != original_code:
+                self.car_code_edit.blockSignals(True)
+                self.car_code_edit.setText(code)
+                self.car_code_edit.blockSignals(False)
+            self.car_validation_label.setText(
+                self.tr(
+                    "Formato do número predial válido."
+                    if valid
+                    else "Formato inválido. Use os 30 dígitos do número "
+                    "predial."
+                )
+            )
+            self.car_code_edit.setStyleSheet(
+                "" if valid else "border: 1px solid #B3261E;"
+            )
+            return valid
         if self.country_combo.currentData() != "BR":
             self.car_validation_label.setText(
                 self.tr(
@@ -4468,7 +4638,9 @@ class MapBiomasAlertDockWidget(QDockWidget):
         elif self.area_car_radio.isChecked():
             car_code = self.car_code_edit.text().strip()
             area = self.tr(
-                "Imóvel rural{}",
+                "Catastro Rural{}"
+                if self.uses_cadastre_code()
+                else "Imóvel rural{}",
                 " {}".format(car_code) if car_code else "",
             )
         else:
@@ -5363,9 +5535,16 @@ class MapBiomasAlertDockWidget(QDockWidget):
                 self.tr("Selecione ao menos um bioma para a busca.")
             )
             return
+        # The API's sources filter means "any of these". With a single
+        # source, "all together" returns exactly the same alerts, so the
+        # platform's official summary still applies.
         server_equivalent_sources = bool(
             not selected_sources
             or self.source_mode_combo.currentData() == "any"
+            or (
+                len(selected_sources) == 1
+                and self.source_mode_combo.currentData() == "all"
+            )
         )
         api_statistics_exact = bool(
             server_equivalent_area
@@ -5430,7 +5609,11 @@ class MapBiomasAlertDockWidget(QDockWidget):
                     self.car_code_edit.blockSignals(False)
                     self.car_code_edit.setStyleSheet("")
                     self.car_validation_label.setText(
-                        self.tr("Código CAR reconhecido pela API.")
+                        self.tr(
+                            "Número predial reconhecido pela API."
+                            if self.uses_cadastre_code()
+                            else "Código CAR reconhecido pela API."
+                        )
                     )
                 alert_codes = [
                     alert.get("alertCode")
@@ -6826,8 +7009,8 @@ class MapBiomasAlertDockWidget(QDockWidget):
                 "app", "reservalegal", "terrespecial", "geoparque",
                 "protmunintegral", "usomunsust", "protestintegral",
                 "usoestsust",
-            },
-            {
+            } | INTERSECTION_GROUP_KEYS,
+            INTERSECTION_AREA_KEYS | {
                 "areaha", "intareaha", "intpct", "ucareaha",
                 "tiareaHa".lower(),
                 "assentarea", "quilombarea", "resbioarea", "manflorarea",
@@ -6987,9 +7170,8 @@ class MapBiomasAlertDockWidget(QDockWidget):
         # downloaded layer. They keep the "unavailable" text until they are
         # filled in further below, when the query is "server-exact".
         no_api_summary_text = self.tr(
-            "Disponível apenas quando a consulta é equivalente à da "
-            "plataforma (sem recorte manual do mapa, todas as fontes e "
-            "sem filtro de cruzamento)."
+            "Disponível apenas quando a plataforma consegue aplicar o "
+            "mesmo filtro da busca."
         )
         self._speed_values = {}
         self.lowest_alert_value.setText("—")
@@ -7095,6 +7277,22 @@ class MapBiomasAlertDockWidget(QDockWidget):
                 if start_date is not None and end_date is not None else None
             )
             self.apply_api_summary(context.get("api_statistics") or {})
+        if self.api_client.country.get("code") != "BR":
+            overlap_lines = self.layer_overlap_lines(layer)
+            self.overlap_counts_value.setText(
+                "\n".join(overlap_lines) if overlap_lines else "—"
+            )
+        elif context.get("api_statistics_exact"):
+            indigenous_line = self.layer_indigenous_land_line(layer)
+            if indigenous_line:
+                lines = [
+                    line for line in
+                    self.overlap_counts_value.text().splitlines()
+                    if line and line != "—"
+                ]
+                # Right after Conservation Units, as on the platform.
+                lines.insert(1 if lines else 0, indigenous_line)
+                self.overlap_counts_value.setText("\n".join(lines))
 
         self.populate_chart_fields(layer)
         if hasattr(self, "chart_note_label"):
@@ -7115,6 +7313,69 @@ class MapBiomasAlertDockWidget(QDockWidget):
                 )
             )
 
+
+    def layer_indigenous_land_line(self, layer):
+        """ "Terras Indígenas: N" counted from the downloaded layer (alerts
+        with a crossed Indigenous Land), or None when the layer doesn't
+        carry that crossing (e.g. crossing data left out of the search)."""
+        name_field = self.find_existing_field(layer, ["TerraIndig"])
+        area_field = self.find_existing_field(layer, ["TIAreaHa"])
+        if name_field is None and area_field is None:
+            return None
+        total = 0
+        for feature in layer.getFeatures():
+            crossed = bool(
+                name_field is not None
+                and str(feature[name_field] or "").strip()
+                and str(feature[name_field]).strip().upper() != "NULL"
+            )
+            if not crossed and area_field is not None:
+                try:
+                    crossed = float(feature[area_field] or 0) > 0
+                except (TypeError, ValueError):
+                    crossed = False
+            if crossed:
+                total += 1
+        return "{}: {}".format(
+            self.tr("Terras Indígenas"), self.format_integer(total)
+        )
+
+    def layer_overlap_lines(self, layer):
+        """Overlap lines ("<type>: <nº of alerts>") counted from the
+        alertIntersections stored in the layer (CruzamentosJson), for
+        countries where the API's summary counters don't apply. Territorial
+        context types (country, department, watershed…) are left out: they
+        cross every alert. Most frequent first."""
+        json_field = self.find_existing_field(layer, ["CruzamentosJson"])
+        if json_field is None:
+            return []
+        labels = self.api_client.country.get("intersection_labels") or {}
+        counts = {}
+        for feature in layer.getFeatures():
+            raw = feature[json_field]
+            if not raw:
+                continue
+            try:
+                entries = json.loads(raw)
+            except (TypeError, ValueError):
+                continue
+            alert_labels = set()
+            for entry in entries or []:
+                type_key = str(entry.get("type") or "").strip()
+                if not type_key or type_key in INTERSECTION_CONTEXT_TYPES:
+                    continue
+                alert_labels.add(
+                    labels.get(type_key)
+                    or str(entry.get("name") or type_key).strip()
+                )
+            for label in alert_labels:
+                counts[label] = counts.get(label, 0) + 1
+        return [
+            "{}: {}".format(label, self.format_integer(total))
+            for label, total in sorted(
+                counts.items(), key=lambda item: (-item[1], item[0])
+            )
+        ]
 
     def apply_api_summary(self, statistics):
         """Writes the platform's official summary (GetAlertsSummary) into
@@ -7230,29 +7491,33 @@ class MapBiomasAlertDockWidget(QDockWidget):
         # (same totals shown on the platform).
         overlap_fields = (
             ("conservationUnitsCount", "Unidades de Conservação"),
-            ("indigenousLandCount", "Terras Indígenas"),
+            # indigenousLandCount is not used: the API returns the total
+            # of alerts in it (checked in Brazil and Colombia). The
+            # Indigenous Lands line is counted from the layer instead
+            # (see layer_indigenous_land_line).
             ("settlementsCount", "Assentamentos"),
-            ("legalReservesCount", "Reservas Legais"),
-            (
-                "permanentProtectedAreasCount",
-                "Áreas de Preservação Permanente",
-            ),
-            ("forestManagementsCount", "Manejo Florestal"),
-            ("riverSourcesCount", "Nascentes de Rios"),
+            # Legal Reserve, APP, forest management and river sources
+            # are not shown (decided with the MapBiomas Alerta team).
             ("ruralPropertiesCount", "Imóveis Rurais (CAR)"),
             # actionsCount (inspection actions) is not shown: like
             # embargoes and authorizations, it's checked in the report.
         )
+        # These counters only mean what their names say in Brazil:
+        # elsewhere indigenousLandCount comes back equal to the total of
+        # alerts (checked in Colombia) and the other categories don't
+        # exist. Outside Brazil the overlaps are counted from the
+        # downloaded layer instead (see layer_overlap_lines).
         overlap_lines = []
-        for field_name, label in overlap_fields:
-            field_value = summary.get(field_name)
-            if field_value is not None:
-                overlap_lines.append(
-                    "{}: {}".format(
-                        self.tr(label),
-                        self.format_integer(field_value),
+        if self.api_client.country.get("code") == "BR":
+            for field_name, label in overlap_fields:
+                field_value = summary.get(field_name)
+                if field_value is not None:
+                    overlap_lines.append(
+                        "{}: {}".format(
+                            self.tr(label),
+                            self.format_integer(field_value),
+                        )
                     )
-                )
         self.overlap_counts_value.setText(
             "\n".join(overlap_lines) if overlap_lines else "—"
         )
@@ -7307,6 +7572,26 @@ class MapBiomasAlertDockWidget(QDockWidget):
                 return field_name
 
         return None
+
+    def register_intersection_groups(self):
+        """Registers the connected country's crossing columns (Cz01…) in
+        TERRITORIAL_AREA_GROUPS, with the country's label as category, and
+        returns them as [(type, field, label)]."""
+        for key in [
+            key for key in TERRITORIAL_AREA_GROUPS
+            if key in INTERSECTION_GROUP_KEYS
+        ]:
+            del TERRITORIAL_AREA_GROUPS[key]
+        groups = intersection_group_fields(
+            self.api_client.country.get("intersection_labels")
+        )
+        for _type_key, field, label in groups:
+            TERRITORIAL_AREA_GROUPS[field.lower()] = (
+                label,
+                "{}Areas".format(field),
+                {"{}area".format(field.lower())},
+            )
+        return groups
 
     def populate_chart_fields(self, layer):
         """Shows only analytic fields common to the selected layers."""
@@ -7365,6 +7650,13 @@ class MapBiomasAlertDockWidget(QDockWidget):
         field_labels["Municipio"] = self.tr(self.api_client.country.get(
             "municipality_label", "Município"
         ))
+        # Crossing types of the connected country (outside Brazil), with
+        # the names used there.
+        for _type_key, field, label in self.register_intersection_groups():
+            field_labels[field] = label
+            field_labels["{}Area".format(field)] = self.tr(
+                "Área em {} (ha)", label
+            )
         previous_group = self.chart_group_combo.currentData()
         previous_value = self.chart_value_combo.currentData()
         self.chart_group_combo.blockSignals(True)
@@ -7386,7 +7678,7 @@ class MapBiomasAlertDockWidget(QDockWidget):
             if key not in common:
                 continue
             label = field_labels.get(field.name(), field.name())
-            if key in group_fields and not (
+            if key in group_fields and key not in HIDDEN_CHART_GROUPS and not (
                 comparing and key in ("fonte", "sources")
             ) and all(
                 self.layer_field_has_values(
@@ -7398,6 +7690,7 @@ class MapBiomasAlertDockWidget(QDockWidget):
             if (
                 field.isNumeric()
                 and key in numeric_fields
+                and key not in HIDDEN_CHART_NUMERIC
                 and all(
                     self.layer_field_has_values(
                         candidate_layer, field.name(), numeric=True
@@ -7407,23 +7700,9 @@ class MapBiomasAlertDockWidget(QDockWidget):
             ):
                 self.chart_value_combo.addItem(self.tr(label), field.name())
 
-        crossing_area_available = any(
-            all(
-                self.layer_field_has_values(candidate_layer, field_name, numeric=True)
-                for candidate_layer in layers
-            )
-            for field_name, _label in self.crossing_area_chart_fields()
-        ) or all(
-            self.layer_field_has_values(
-                candidate_layer, "CruzamentosJson", numeric=False
-            )
-            for candidate_layer in layers
-        )
-        if crossing_area_available:
-            self.chart_group_combo.addItem(
-                self.tr("Áreas por tipo de cruzamento"),
-                "__crossing_area_type__",
-            )
+        # "Áreas por tipo de cruzamento" is no longer offered: each
+        # crossing type has its own option (decided with the MapBiomas
+        # Alerta team).
 
         group_index = self.chart_group_combo.findData(previous_group)
         if group_index < 0:
@@ -7507,6 +7786,8 @@ class MapBiomasAlertDockWidget(QDockWidget):
             "geoparque", "protmunintegral", "usomunsust",
             "protestintegral", "usoestsust",
         )
+        if field_key in INTERSECTION_GROUP_KEYS:
+            crossing_fields += (field_key,)
         split_fields = geographic_fields + crossing_fields
 
         if field_key in source_fields:
@@ -7545,7 +7826,7 @@ class MapBiomasAlertDockWidget(QDockWidget):
         previous = self.chart_category_combo.currentData()
         self.chart_category_combo.blockSignals(True)
         self.chart_category_combo.clear()
-        self.chart_category_combo.addItem("Todos os valores", None)
+        self.chart_category_combo.addItem(self.tr("Todos os valores"), None)
 
         if layer is not None and group_field:
             values = set()
@@ -7564,15 +7845,20 @@ class MapBiomasAlertDockWidget(QDockWidget):
                     self.normalize_territory_area_rows(
                         candidate_layer, categories=[category]
                     )
-                    values.update(
+                    area_values = {
                         territory
                         for _code, row_category, territory, _area in
                         self.territory_rows_by_layer.get(
                             candidate_layer.id(), []
                         )
                         if row_category.casefold() == category.casefold()
-                    )
-                    continue
+                    }
+                    if area_values:
+                        values.update(area_values)
+                        continue
+                    # No per-territory area rows for this category (e.g.
+                    # Conservation Units without an area map): list the
+                    # names from the layer field instead.
                 candidate_group_field = self.find_existing_field(
                     candidate_layer, [group_field]
                 )
@@ -7652,8 +7938,8 @@ class MapBiomasAlertDockWidget(QDockWidget):
                 field_name for field_name in map_fields
                 if categories_by_map_field.get(
                     field_name.casefold(),
-                    (field_name[:-5] or field_name).casefold(),
-                ) in pending
+                    field_name[:-5] or field_name,
+                ).casefold() in pending
             ]
         pair_items = list(MapBiomasApiClient.TERRITORY_AREA_PAIRS.items())
         if pending is not None:
@@ -7765,14 +8051,17 @@ class MapBiomasAlertDockWidget(QDockWidget):
         # called every time the user switches the chart field or checks the
         # summary.
         self.normalize_territory_area_rows(layer, categories=[category])
-        if layer.id() in self.territory_rows_by_layer:
+        category_rows = [
+            row for row in self.territory_rows_by_layer.get(layer.id(), [])
+            if row[1].casefold() == category.casefold()
+        ]
+        # Rows of other categories don't count: when this one has none
+        # (e.g. no per-unit area map for Conservation Units in this layer),
+        # fall back to the layer fields below instead of an empty chart.
+        if category_rows:
             totals = {}
             counts = {}
-            for _code, row_category, territory, area in (
-                self.territory_rows_by_layer[layer.id()]
-            ):
-                if row_category.casefold() != category.casefold():
-                    continue
+            for _code, _row_category, territory, area in category_rows:
                 if (
                     selected_category is not None
                     and territory != selected_category
@@ -7961,7 +8250,7 @@ class MapBiomasAlertDockWidget(QDockWidget):
             "manflorest", "protintegral", "usosustent", "terrespecial",
             "app", "reservalegal", "geoparque", "protmunintegral",
             "usomunsust", "protestintegral", "usoestsust",
-        }
+        } | INTERSECTION_GROUP_KEYS
         def aggregate(candidate_layer):
             totals = {}
             counts = {}
@@ -8173,18 +8462,10 @@ class MapBiomasAlertDockWidget(QDockWidget):
             all_items = sorted(
                 totals.items(), key=sort_key, reverse=not chronological,
             )
-            limit = self.chart_limit_spin.value()
-            items = all_items[:limit]
-            # Same rule for bars and pie (they used to differ): the N-1
-            # largest groups plus "Outros" with the rest, so both charts
-            # show the same groups and the same total.
-            if not chronological and len(all_items) > limit:
-                items = all_items[:max(1, limit - 1)]
-                others = all_items[max(1, limit - 1):]
-                items.append((
-                    self.tr("Outros ({} grupos)", len(others)),
-                    sum(value for _, value in others),
-                ))
+            # Only the number of groups asked for (bars and pie alike), with
+            # no "Outros" group for the rest: the full data is in the
+            # exports.
+            items = all_items[:self.chart_limit_spin.value()]
         self.chart_widget.set_items(items)
         calculation_label = self.chart_metric_combo.currentText()
         value_label = (
@@ -8577,13 +8858,14 @@ class MapBiomasAlertDockWidget(QDockWidget):
         rows.append(
             [self.tr("Período analisado"), self.period_result_value.text()]
         )
-        rows.append([
-            self.tr("Observação"),
-            self.tr(
-                "Embargos, autorizações e ações de fiscalização: consulte "
-                "o laudo na plataforma."
-            ),
-        ])
+        if self.shows_embargo_note():
+            rows.append([
+                self.tr("Observação"),
+                self.tr(
+                    "Embargos, autorizações e ações de fiscalização: "
+                    "consulte o laudo na plataforma."
+                ),
+            ])
         return rows
 
     def export_result_summary(self):
@@ -9622,15 +9904,14 @@ class MapBiomasAlertDockWidget(QDockWidget):
         if alert_intersections:
             # New, unified field (see comment in
             # api_client.py/ALERT_INTERSECTIONS_FIELDS) — each item already
-            # represents a whole intersection type, with the label (name)
-            # already ready and translated by the API itself, the crossed
-            # territory names and the total area. This also captures
+            # represents a whole intersection type, with the crossed
+            # territory names and the total area (the label comes from
+            # intersection_label — outside Brazil the API's "name" is the
+            # data source, not a label). This also captures
             # country-specific intersection types (configurable per
             # initiative) that the legacy crossed* fields never exposed.
             for entry in alert_intersections:
-                type_label = str(
-                    entry.get("name") or entry.get("type") or ""
-                ).strip()
+                type_label = self.api_client.intersection_label(entry)
                 if not type_label:
                     continue
                 total_area = entry.get("totalAreaHa")
@@ -9707,6 +9988,8 @@ class MapBiomasAlertDockWidget(QDockWidget):
             "<br><b style=\"color:#C0392B;\">{}</b>".format(
                 self.tr(NOT_SHOWN_CROSSINGS_NOTE)
             )
+            if self.shows_embargo_note()
+            else ""
         )
         crossings_title = "<b>{}</b><br>".format(
             self.tr("Cruzamentos territoriais e ambientais")
@@ -9727,16 +10010,31 @@ class MapBiomasAlertDockWidget(QDockWidget):
                 self.api_client.supports_alert_intersections()
                 or self.api_client.supported_analytic_fields()
             )
-            message = self.tr(
-                "Nenhum cruzamento territorial ou ambiental (Unidade "
-                "de Conservação, Terra Indígena, Assentamento etc.) "
-                "foi registrado para este alerta. Imóveis rurais "
-                "cruzados aparecem em uma seção própria, logo abaixo."
-                if supported
-                else
-                "A API deste país não disponibilizou campos de "
-                "cruzamento compatíveis."
-            )
+            country = self.api_client.country
+            if not supported:
+                message = self.tr(
+                    "A API deste país não disponibilizou campos de "
+                    "cruzamento compatíveis."
+                )
+            elif country.get("code") == "BR":
+                message = self.tr(
+                    "Nenhum cruzamento territorial ou ambiental (Unidade "
+                    "de Conservação, Terra Indígena, Assentamento etc.) "
+                    "foi registrado para este alerta. Imóveis rurais "
+                    "cruzados aparecem em uma seção própria, logo abaixo."
+                )
+            else:
+                # No Brazil-only examples (Conservation Unit, Settlement…)
+                # outside Brazil.
+                message = self.tr(
+                    "Nenhum cruzamento territorial ou ambiental foi "
+                    "registrado para este alerta."
+                )
+                if country.get("has_rural_property_search"):
+                    message += " " + self.tr(
+                        "Imóveis rurais cruzados aparecem em uma seção "
+                        "própria, logo abaixo."
+                    )
             self.detail_intersections_label.setText(
                 crossings_title
                 + message
@@ -9767,6 +10065,8 @@ class MapBiomasAlertDockWidget(QDockWidget):
 
     def populate_detail_crossings(self, details, labels):
         self.same_property_cache = None
+        self.same_property_note_label.clear()
+        self.same_property_note_label.setVisible(False)
         self.same_crossing_status_label.clear()
         self.same_crossing_status_label.setVisible(False)
         self.detail_crossing_combo.blockSignals(True)
@@ -9868,6 +10168,32 @@ class MapBiomasAlertDockWidget(QDockWidget):
         )
         self.same_crossing_status_label.clear()
         self.same_crossing_status_label.setVisible(False)
+        self.update_same_property_note(count)
+
+    def update_same_property_note(self, count):
+        """Attention note under the button: the count adds up every
+        crossed property, from any date, so it can be much larger than
+        what the user expects. Lists each property's own total, the same
+        number as "Alertas cruzados" in the platform's property report."""
+        property_totals = getattr(self, "same_property_totals", None) or []
+        if not count or not property_totals:
+            self.same_property_note_label.clear()
+            self.same_property_note_label.setVisible(False)
+            return
+        lines = [
+            "• {}: {}".format(
+                html.escape(str(code)),
+                html.escape(self.tr("{} alerta(s) no imóvel", total)),
+            )
+            for code, total in property_totals
+        ]
+        self.same_property_note_label.setText(
+            "<b style=\"color:#C0392B;\">{}</b><br>{}".format(
+                html.escape(self.tr(SAME_PROPERTY_COUNT_NOTE)),
+                "<br>".join(lines),
+            )
+        )
+        self.same_property_note_label.setVisible(True)
 
     def same_property_alert_groups(self, show_progress=False):
         """Return unique related alerts grouped by rural property."""
@@ -9879,6 +10205,7 @@ class MapBiomasAlertDockWidget(QDockWidget):
         ]
         groups = []
         seen_alerts = set()
+        self.same_property_totals = []
         total_properties = len(property_codes)
         for property_index, property_code in enumerate(property_codes, 1):
             if show_progress:
@@ -9901,6 +10228,14 @@ class MapBiomasAlertDockWidget(QDockWidget):
                     Qgis.Warning,
                 )
                 continue
+            property_alert_codes = {
+                str(alert.get("alertCode") or "").strip()
+                for alert in summary.get("alerts") or []
+            }
+            property_alert_codes.discard("")
+            self.same_property_totals.append(
+                (property_code, len(property_alert_codes))
+            )
             alerts = []
             for alert in summary.get("alerts") or []:
                 code = str(alert.get("alertCode") or "").strip()
@@ -10466,8 +10801,11 @@ class MapBiomasAlertDockWidget(QDockWidget):
     def clear_alert_details(self):
         self.current_detail_alert_code = None
         self.same_property_cache = None
+        self.same_property_totals = []
         if not hasattr(self, "detail_status_label"):
             return
+        self.same_property_note_label.clear()
+        self.same_property_note_label.setVisible(False)
         self.detail_status_label.setText(
             self.tr(
                 "Identifique um alerta no mapa para consultar imagens "
@@ -10758,6 +11096,7 @@ class MapBiomasAlertDockWidget(QDockWidget):
             config.get("has_rural_property_search", True)
         )
         self.area_car_radio.setVisible(has_rural_property)
+        self.update_rural_property_texts()
         # The map-server quick view is no longer offered (it didn't
         # apply the search filters). Every search builds the real layer.
         has_quick_view = False
@@ -10991,6 +11330,7 @@ class MapBiomasAlertDockWidget(QDockWidget):
             options = [
                 ("intersection:{}".format(type_key), label)
                 for type_key, label in discovered_types
+                if not is_hidden_intersection(type_key, label)
             ]
         elif is_brazil:
             options = [

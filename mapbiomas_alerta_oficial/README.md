@@ -13,7 +13,7 @@ Official QGIS plugin of MapBiomas Alerta. It uses the MapBiomas Alerta GraphQL A
 1. Open the panel from the toolbar icon or **Plugins › MapBiomas Alerta Oficial**.
 2. Accept the country's information notice.
 3. Choose the country and language, then sign in under **API access**.
-4. In **Filters**, choose the area of interest (whole country, biome, vector layer, coordinate, alert code or, in Brazil, CAR code) and the period, then click **Search alerts**.
+4. In **Filters**, choose the area of interest (whole country, biome, vector layer, coordinate, alert code or rural property code — CAR in Brazil, Catastro Rural in Colombia) and the period, then click **Search alerts**.
 5. Explore the results in **Statistics**, **Charts** and **Details**, and export them from **Statistics**, **Charts** or **Layers**.
 
 ## Files

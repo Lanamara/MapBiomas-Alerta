@@ -8,12 +8,12 @@ Supported countries: **Brazil, Bolivia, Colombia, Peru and Indonesia**. Interfac
 
 ## Features
 
-- **Area of interest:** whole country, one or more biomes, a polygon layer already loaded in QGIS, a single coordinate, an alert code or — Brazil only — a rural property (CAR) code.
+- **Area of interest:** whole country, one or more biomes, a polygon layer already loaded in QGIS, a single coordinate, an alert code or a rural property code (CAR in Brazil, Número Predial Nacional of the Catastro Rural in Colombia).
 - **Period:** detection date or publication date, up to one year per search, with quick ranges (last 30 days, 90 days, this year).
 - **Filters:** minimum area, detection sources (any / all together / exact combination) and territorial or environmental crossings (with or without a crossing).
 - **Search summary:** total alerts, deforested area, daily average, largest and smallest alerts, highest speed, municipality with the largest area, overlaps and analyzed period.
 - **Statistical analysis and charts:** bar, pie and line charts by source, biome, region, municipality, date or crossing type, using count, sum or average; enlarged chart window.
-- **Alert details:** metadata, crossings, crossed rural properties (Brazil), before/after satellite images and a link to the full report on the platform.
+- **Alert details:** metadata, crossings, crossed rural properties (Brazil and Colombia), before/after satellite images and a link to the full report on the platform.
 - **Exports:** attribute table (CSV, XLSX), whole layer (GeoPackage, Shapefile), chart (PNG), chart alerts (CSV, GeoPackage, Shapefile) and summary (XLSX).
 
 | Summary | Analysis | Alert details |
@@ -65,7 +65,8 @@ Step-by-step guides with screenshots, one per country, in the language used by e
 
 ## Country-specific notes
 
-- The rural property (CAR) search is available for Brazil only.
+- The rural property search is available for Brazil (CAR code) and Colombia (30-digit Número Predial Nacional of the Catastro Rural).
+- Outside Brazil, crossings use each country's own categories and names (e.g. Resguardo Indígena, Área Natural Protegida, Comunidad Nativa Titulada), and each category gets its own columns in the layer so it can be charted.
 - Biome lists, detection sources and crossing types are loaded from each country's platform after sign-in, so they differ between countries.
 - Crossings with embargoes, authorizations and enforcement actions are not shown in the plugin; they are available in the alert report on the platform.
 
