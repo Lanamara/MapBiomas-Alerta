@@ -5636,7 +5636,7 @@ class MapBiomasAlertDockWidget(QDockWidget):
             # Exclusive searches (by alert code, by CAR, or by
             # coordinate) used not to send startDate/endDate, since the
             # chosen filter is already exact on its own. Except that
-            # combination (alertCodes or carCodes with NO date at all) is
+            # combination (alertCodes or propertyCodes with NO date at all) is
             # exactly what caused HTTP 500 in real-world tests — both for
             # alert-code and CAR search. Sending a very wide date range
             # here doesn't change which alerts come back (the chosen
@@ -5711,7 +5711,7 @@ class MapBiomasAlertDockWidget(QDockWidget):
                     alert_code=(
                         alert_code or None
                     ),
-                    # For CAR, pagination uses carCodes directly. The list
+                    # For CAR, pagination uses propertyCodes directly. The list
                     # obtained above only serves to validate that the
                     # property has alerts and doesn't need to be resent to
                     # the API.
@@ -10652,11 +10652,19 @@ class MapBiomasAlertDockWidget(QDockWidget):
                 "<b>{}:</b> {} ha &nbsp;&nbsp; "
                 "<b>{}:</b> {}".format(
                     self.tr("Tipo"),
-                    html.escape(str(summary.get("carType") or "—")),
+                    html.escape(str(
+                        summary.get("propertyType")
+                        or summary.get("carType")
+                        or "—"
+                    )),
                     self.tr("Área do imóvel"),
                     self.format_decimal(summary.get("areaHa") or 0),
                     self.tr(self.api_client.country.get("region_label", "Estado")),
-                    html.escape(str(summary.get("state") or "—")),
+                    html.escape(str(
+                        summary.get("stateAcronym")
+                        or summary.get("state")
+                        or "—"
+                    )),
                 )
             )
             property_text.setWordWrap(True)

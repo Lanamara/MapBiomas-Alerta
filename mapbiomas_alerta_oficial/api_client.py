@@ -516,7 +516,7 @@ class MapBiomasApiClient:
           $endDate: BaseDate, $dateType: DateTypes,
           $startSize: Float, $endSize: Float,
           $sources: [SourceTypes!], $alertCodes: [ID!],
-          $carCodes: [ID!], $boundingBox: [Float!],
+          $propertyCodes: [ID!], $boundingBox: [Float!],
           $territoryIds: [Int!] = [], $territoryCategory: String,
           $statusName: String,
           $sortField: AlertSortField, $sortDirection: SortDirection
@@ -525,7 +525,8 @@ class MapBiomasApiClient:
             page: $page, limit: $limit,
             startDate: $startDate, endDate: $endDate,
             dateType: $dateType, startSize: $startSize, endSize: $endSize,
-            sources: $sources, alertCodes: $alertCodes, carCodes: $carCodes,
+            sources: $sources, alertCodes: $alertCodes,
+            propertyCodes: $propertyCodes,
             boundingBox: $boundingBox,
             territoryIds: $territoryIds,
             territoryCategory: $territoryCategory,
@@ -557,7 +558,10 @@ class MapBiomasApiClient:
     """
 
     # Query provided by the MapBiomas Alerta Platform team. The same
-    # arguments are kept without fallback or substitution. The rankings
+    # arguments are kept without fallback or substitution, except
+    # isInEmbargoedArea: deprecated in May 2026 and removed from the
+    # schema (replaced by isInEmbargoedRuralProperty/isInEmbargoedAlerta).
+    # It was always sent as null, so leaving it out changes nothing. The rankings
     # documented in the ``alerts`` result complete the summary without any
     # local reconstruction of areas by city, state or biome.
     ALERTS_SUMMARY_QUERY = """
@@ -567,7 +571,7 @@ class MapBiomasApiClient:
           $dateType: DateTypes!, $startSize: Float = 0.0,
           $endSize: Float = 9999999.0, $territoryIds: [Int!] = [],
           $territoryCategory: String, $sources: [SourceTypes!],
-          $intersectWithCar: Boolean, $isInEmbargoedArea: Boolean,
+          $intersectWithCar: Boolean,
           $isInAuthorizedArea: Boolean,
           $deforestationClasses: [DeforestationTypes!] = [All],
           $actionTypesIds: [Int!] = [], $boundingBox: [Float!]
@@ -579,7 +583,6 @@ class MapBiomasApiClient:
             territoryIds: $territoryIds,
             territoryCategory: $territoryCategory, sources: $sources,
             intersectWithCar: $intersectWithCar,
-            isInEmbargoedArea: $isInEmbargoedArea,
             isInAuthorizedArea: $isInAuthorizedArea,
             deforestationClasses: $deforestationClasses,
             actionTypesIds: $actionTypesIds, boundingBox: $boundingBox
@@ -690,12 +693,15 @@ class MapBiomasApiClient:
         }
     """
 
+    # ruralProperty takes "propertyCode" (per the current API docs); older
+    # API versions called that argument "carCode", so the name is picked
+    # by introspection (see rural_property_schema()). The variable is
+    # $propertyCode either way.
     RURAL_PROPERTY_QUERY = """
-        query RuralProperty($carCode: String!) {
-          ruralProperty(carCode: $carCode) {
+        query RuralProperty($propertyCode: String!) {
+          ruralProperty(__RURAL_PROPERTY_ARGUMENT__: $propertyCode) {
             propertyCode
             areaHa
-            state
             __RURAL_PROPERTY_FIELDS__
             alerts {
               alertCode
@@ -704,51 +710,61 @@ class MapBiomasApiClient:
         }
     """
 
-    # carType (CAR classification) and stateAcronym (Brazilian state
-    # abbreviation) are conventions of Brazilian legislation — not
-    # confirmed in other countries, which may have a rural property
-    # registry with a different structure (e.g. "Terreno de Predio Rural"
-    # in Colombia). Only included in the query if introspection confirms
-    # they exist.
-    RURAL_PROPERTY_OPTIONAL_FIELDS = ("carType", "stateAcronym")
+    # Optional RuralPropertyData fields as (current, deprecated) pairs:
+    # carType was replaced by propertyType and state by stateAcronym. The
+    # current name is requested when the schema has it, otherwise the old
+    # one (older API versions) — never both.
+    RURAL_PROPERTY_OPTIONAL_FIELDS = (
+        ("propertyType", "carType"),
+        ("stateAcronym", "state"),
+    )
 
-    def supported_rural_property_fields(self):
-        if self._supported_rural_property_fields is not None:
-            return self._supported_rural_property_fields
+    def rural_property_schema(self):
+        """(argument name, optional fields) for the ruralProperty query,
+        confirmed by introspection of RuralPropertyData (the query's
+        return type) and of the query's own arguments. Cached; on failure
+        falls back to the documented argument and no optional fields."""
+        if self._rural_property_schema is not None:
+            return self._rural_property_schema
         query = """
-            query RuralPropertyFields {
-              __type(name: "RuralProperty") {
+            query RuralPropertySchema {
+              data: __type(name: "RuralPropertyData") {
                 fields { name }
+              }
+              root: __type(name: "Query") {
+                fields { name args { name } }
               }
             }
         """
         try:
             data = self.graphql(query)
-            type_info = data.get("__type")
-            if type_info is None:
-                # Type name not confirmed by introspection — no way to
-                # be sure, but this doesn't block the query: it just
-                # omits the optional fields.
-                self._supported_rural_property_fields = []
-                return self._supported_rural_property_fields
-            available = {
-                item.get("name")
-                for item in (type_info.get("fields") or [])
-            }
-            self._supported_rural_property_fields = [
-                field for field in self.RURAL_PROPERTY_OPTIONAL_FIELDS
-                if field in available
-            ]
         except Exception as error:
-            self._supported_rural_property_fields = None
             QgsMessageLog.logMessage(
-                "Failed to query the RuralProperty schema at {}: "
+                "Failed to query the RuralPropertyData schema at {}: "
                 "{}".format(self.endpoint, error),
                 "MapBiomas Alerta Oficial",
                 Qgis.Warning,
             )
-            return []
-        return self._supported_rural_property_fields
+            return "propertyCode", []
+        available = {
+            item.get("name")
+            for item in ((data.get("data") or {}).get("fields") or [])
+        }
+        fields = []
+        for current, deprecated in self.RURAL_PROPERTY_OPTIONAL_FIELDS:
+            if current in available:
+                fields.append(current)
+            elif deprecated in available:
+                fields.append(deprecated)
+        argument = "propertyCode"
+        for field in (data.get("root") or {}).get("fields") or []:
+            if field.get("name") != "ruralProperty":
+                continue
+            names = {arg.get("name") for arg in field.get("args") or []}
+            if "propertyCode" not in names and "carCode" in names:
+                argument = "carCode"
+        self._rural_property_schema = (argument, fields)
+        return self._rural_property_schema
 
     def __init__(self, country):
         self.country = dict(country)
@@ -766,7 +782,7 @@ class MapBiomasApiClient:
         self.intersection_discovery_error = None
         self._supported_summary_fields = None
         self.analytic_fields_error = None
-        self._supported_rural_property_fields = None
+        self._rural_property_schema = None
         self._source_types = None
         self._territory_options = None
         self._rural_property_cache = {}
@@ -847,7 +863,7 @@ class MapBiomasApiClient:
         elif alert_codes:
             variables["alertCodes"] = [str(code) for code in alert_codes]
         if property_codes:
-            variables["carCodes"] = [str(code) for code in property_codes]
+            variables["propertyCodes"] = [str(code) for code in property_codes]
         if sources:
             variables["sources"] = list(sources)
         if bbox is not None:
@@ -1223,7 +1239,6 @@ class MapBiomasApiClient:
             "territoryCategory": territory_category,
             "sources": list(sources or ["All"]),
             "intersectWithCar": None,
-            "isInEmbargoedArea": None,
             "isInAuthorizedArea": None,
             "deforestationClasses": ["All"],
             "actionTypesIds": [],
@@ -1300,16 +1315,6 @@ class MapBiomasApiClient:
         if not alert:
             raise RuntimeError("A API não encontrou o alerta informado.")
         return alert
-
-    TERRITORY_OPTIONS_QUERY = """
-        query TerritoryOptions {
-          territoryOptions {
-            category
-            categoryName
-            territories { id name }
-          }
-        }
-    """
 
     def wms_layer_names(self, wms_url):
         """Names published by the map server (GetCapabilities), cached."""
@@ -1479,14 +1484,13 @@ class MapBiomasApiClient:
         if not code:
             return {}
         if code not in self._rural_property_cache:
+            argument, fields = self.rural_property_schema()
             query = self.RURAL_PROPERTY_QUERY.replace(
-                "__RURAL_PROPERTY_FIELDS__",
-                "\n".join(self.supported_rural_property_fields()),
+                "__RURAL_PROPERTY_ARGUMENT__", argument
+            ).replace(
+                "__RURAL_PROPERTY_FIELDS__", "\n".join(fields)
             )
-            data = self.graphql(
-                query,
-                {"carCode": code},
-            )
+            data = self.graphql(query, {"propertyCode": code})
             self._rural_property_cache[code] = data.get("ruralProperty") or {}
         return self._rural_property_cache[code]
 

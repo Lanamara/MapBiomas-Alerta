@@ -3,6 +3,13 @@
 All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- Rural property search follows the current API: `ruralProperty(propertyCode: ...)` instead of `carCode`, and `propertyType`/`stateAcronym` instead of the deprecated `carType`/`state` (older APIs are still detected and supported).
+- Alert download by rural property uses the `propertyCodes` argument of `alerts` (`carCodes` was removed from the API).
+- Summary query no longer sends `isInEmbargoedArea`, removed from the API in May 2026.
+
 ## [1.0.0] - 2026-09
 
 First public release in the QGIS Plugin Repository.
