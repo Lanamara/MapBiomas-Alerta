@@ -540,9 +540,7 @@ class MapBiomasApiClient:
               publishedAt
               geometryWkt
               sources
-              crossedBiomes
-              crossedStates
-              crossedCities
+              __LEGACY_TERRITORY_NAMES__
               imageAcquiredBeforeAt
               imageAcquiredAfterAt
               __ALERT_INTERSECTIONS__
@@ -594,8 +592,7 @@ class MapBiomasApiClient:
               biggestDeforestationSpeed
               biggestDeforestationSpeedAlert {
                 alertCode
-                crossedCities
-                crossedStates
+                __SUMMARY_ALERT_TERRITORIES__
                 __typename
               }
               __SUMMARY_COUNT_FIELDS__
@@ -626,15 +623,13 @@ class MapBiomasApiClient:
               biggestAlertArea
               biggestAlert {
                 alertCode
-                crossedCities
-                crossedStates
+                __SUMMARY_ALERT_TERRITORIES__
                 __typename
               }
               lowestAlertArea
               lowestAlert {
                 alertCode
-                crossedCities
-                crossedStates
+                __SUMMARY_ALERT_TERRITORIES__
                 __typename
               }
               __typename
@@ -671,12 +666,8 @@ class MapBiomasApiClient:
             detectedAt
             publishedAt
             sources
-            crossedBiomes
-            crossedBiomesList
-            crossedStates
-            crossedStatesList
-            crossedCities
-            crossedCitiesList
+            __LEGACY_TERRITORY_NAMES__
+            __LEGACY_TERRITORY_LISTS__
             imageAcquiredBeforeAt
             imageAcquiredAfterAt
             publishedImages {
@@ -773,6 +764,7 @@ class MapBiomasApiClient:
         self.token = None
         self._supported_analytic_fields = None
         self._supports_alert_intersections = None
+        self._alert_data_fields = None
         # Cache of the check for which crossing categories have real data
         # (not just the field name existing in the schema) for the
         # connected country — see crossing_availability().
@@ -916,11 +908,11 @@ class MapBiomasApiClient:
         )
         analytic_fields = []
         if include_analytics:
-            analytic_fields.extend((
-                "crossedBiomesList",
-                "crossedStatesList",
-                "crossedCitiesList",
-            ))
+            legacy_fields = self.supported_legacy_territory_fields()
+            analytic_fields.extend(
+                field for field in self.LEGACY_TERRITORY_LISTS
+                if field in legacy_fields
+            )
             analytic_fields.extend(
                 field for field in (
                     list(self.ANALYTIC_FIELDS) + list(self.AREA_MAP_FIELDS)
@@ -1049,7 +1041,7 @@ class MapBiomasApiClient:
                     continue
                 if alert_code_value:
                     seen_alert_codes.add(alert_code_value)
-                unique_batch.append(alert)
+                unique_batch.append(self.fill_legacy_territory_fields(alert))
             server_feature_count += len(unique_batch)
             for alert in unique_batch:
                 try:
@@ -1246,12 +1238,24 @@ class MapBiomasApiClient:
                 [float(value) for value in bbox] if bbox is not None else None
             ),
         }
+        legacy = self.supported_legacy_territory_fields()
+        if "crossedCities" in legacy and "crossedStates" in legacy:
+            summary_territories = "crossedCities\ncrossedStates"
+        elif self.supports_alert_intersections():
+            summary_territories = self.SUMMARY_ALERT_INTERSECTIONS_FIELDS
+        else:
+            summary_territories = ""
         query = self.ALERTS_SUMMARY_QUERY.replace(
             "__SUMMARY_COUNT_FIELDS__",
             "\n".join(self.supported_summary_fields()),
-        )
+        ).replace("__SUMMARY_ALERT_TERRITORIES__", summary_territories)
         data = self.graphql(query, variables)
         result = data.get("alerts") or {}
+        summary = result.get("summary") or {}
+        for key in (
+            "biggestAlert", "lowestAlert", "biggestDeforestationSpeedAlert",
+        ):
+            self.fill_legacy_territory_fields(summary.get(key))
         return {
             "summary": result.get("summary") or {},
             "rankingByBiome": result.get("rankingByBiome") or [],
@@ -1314,7 +1318,7 @@ class MapBiomasApiClient:
         alert = data.get("alert")
         if not alert:
             raise RuntimeError("A API não encontrou o alerta informado.")
-        return alert
+        return self.fill_legacy_territory_fields(alert)
 
     def wms_layer_names(self, wms_url):
         """Names published by the map server (GetCapabilities), cached."""
@@ -1565,6 +1569,80 @@ class MapBiomasApiClient:
         }
     """
 
+    # Biome/state/city names and per-territory areas. The API docs mark
+    # every crossed* field as deprecated (to be removed in a future v2
+    # version), so these are only requested while AlertData still has
+    # them; otherwise fill_legacy_territory_fields() rebuilds them from
+    # alertIntersections, so the layer columns and panels keep working.
+    LEGACY_TERRITORY_NAMES = ("crossedBiomes", "crossedStates", "crossedCities")
+    LEGACY_TERRITORY_LISTS = (
+        "crossedBiomesList", "crossedStatesList", "crossedCitiesList",
+    )
+    # alertIntersections types for each field, in order of preference
+    # (Brazil's type first, then the equivalent level in other countries:
+    # department/province for state, municipality/district for city).
+    LEGACY_TERRITORY_TYPES = {
+        "crossedBiomes": ("BIOME", "REFINED_BIOME"),
+        "crossedStates": ("STATE", "DEPARTMENT", "PROVINCE"),
+        "crossedCities": ("CITY", "MUNICIPALITY", "DISTRICT"),
+    }
+    SUMMARY_ALERT_INTERSECTIONS_FIELDS = (
+        "alertIntersections { type names }"
+    )
+
+    def supported_legacy_territory_fields(self):
+        """The LEGACY_TERRITORY_* fields AlertData still has. If the
+        introspection failed, assumes all of them (previous behavior)."""
+        self.supported_analytic_fields()
+        available = self._alert_data_fields
+        fields = self.LEGACY_TERRITORY_NAMES + self.LEGACY_TERRITORY_LISTS
+        if available is None:
+            return list(fields)
+        return [field for field in fields if field in available]
+
+    def legacy_territory_fields_missing(self):
+        return len(self.supported_legacy_territory_fields()) < len(
+            self.LEGACY_TERRITORY_NAMES + self.LEGACY_TERRITORY_LISTS
+        )
+
+    @classmethod
+    def fill_legacy_territory_fields(cls, alert):
+        """Fills crossedBiomes/States/Cities (and their ...List areas)
+        from alertIntersections when the API didn't return them. Fields
+        the API did return are never touched."""
+        if not isinstance(alert, dict):
+            return alert
+        by_type = {}
+        for entry in alert.get("alertIntersections") or []:
+            by_type.setdefault(
+                str(entry.get("type") or "").upper(), []
+            ).append(entry)
+        if not by_type:
+            return alert
+        for field, types in cls.LEGACY_TERRITORY_TYPES.items():
+            list_field = field + "List"
+            if field in alert and list_field in alert:
+                continue
+            type_key = next((key for key in types if key in by_type), None)
+            if type_key is None:
+                continue
+            names = []
+            units = []
+            for entry in by_type[type_key]:
+                names.extend(
+                    name for name in entry.get("names") or [] if name
+                )
+                units.extend(
+                    {"name": unit.get("name"), "areaHa": unit.get("crossAreaHa")}
+                    for unit in entry.get("units") or []
+                    if unit.get("name")
+                )
+            if field not in alert:
+                alert[field] = list(dict.fromkeys(names))
+            if list_field not in alert and units:
+                alert[list_field] = units
+        return alert
+
     def query_with_analytic_fields(
         self, query, fields=None, include_intersections=True
     ):
@@ -1574,6 +1652,25 @@ class MapBiomasApiClient:
             "__ANALYTIC_FIELDS__",
             "\n".join(fields),
         )
+        legacy = self.supported_legacy_territory_fields()
+        query = query.replace(
+            "__LEGACY_TERRITORY_NAMES__",
+            "\n".join(
+                field for field in self.LEGACY_TERRITORY_NAMES
+                if field in legacy
+            ),
+        ).replace(
+            "__LEGACY_TERRITORY_LISTS__",
+            "\n".join(
+                field for field in self.LEGACY_TERRITORY_LISTS
+                if field in legacy
+            ),
+        )
+        # Without the legacy fields, biome/state/city come only from
+        # alertIntersections — so it's needed even when the caller
+        # didn't ask for it.
+        if self.legacy_territory_fields_missing():
+            include_intersections = True
         # alertIntersections is the new, unified field that the API's own
         # documentation recommends in place of the crossed* fields
         # (marked as deprecated) — only included in the query if
@@ -1626,10 +1723,12 @@ class MapBiomasApiClient:
             self._supports_alert_intersections = (
                 "alertIntersections" in available
             )
+            self._alert_data_fields = available
             self.analytic_fields_error = None
         except Exception as error:
             self._supported_analytic_fields = None
             self._supports_alert_intersections = None
+            self._alert_data_fields = None
             self.analytic_fields_error = str(error)
             QgsMessageLog.logMessage(
                 "Failed to query analytic fields at {}: {}".format(

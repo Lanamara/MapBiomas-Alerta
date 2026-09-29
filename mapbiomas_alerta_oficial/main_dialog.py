@@ -124,6 +124,7 @@ from .api_client import (
 from .country_config import (
     HIDDEN_INTERSECTION_HINTS,
     INTERSECTION_CONTEXT_TYPES,
+    SOURCE_VALUE_ALIASES,
     intersection_group_fields,
     country_config,
     country_items,
@@ -11231,7 +11232,11 @@ class MapBiomasAlertDockWidget(QDockWidget):
         self.source_combo.clear()
         for source_value, _description in source_types:
             self.source_combo.add_check_item(
-                configured_labels.get(source_value, source_value),
+                configured_labels.get(source_value)
+                or configured_labels.get(
+                    SOURCE_VALUE_ALIASES.get(source_value)
+                )
+                or source_value,
                 source_value,
             )
         self.source_combo.update_text()

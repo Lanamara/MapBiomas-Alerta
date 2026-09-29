@@ -237,6 +237,17 @@ def intersection_group_fields(labels):
     ]
 
 
+# Detection-source enum values (SourceTypes) as spelled in the API docs,
+# mapped to the spelling used in the "sources" lists below. The two
+# don't match for these Brazilian sources, so the label is found under
+# either name, whichever the connected API returns.
+SOURCE_VALUE_ALIASES = {
+    "ProdesAmz": "ProdesAmazonia",
+    "ProdesCerr": "ProdesCerrado",
+    "Siradx": "SiradX",
+}
+
+
 COMMON_FIELDS = {
     "alert_code": "CodeAlerta",
     "source": "Fonte",
@@ -430,9 +441,10 @@ COUNTRIES = {
             + NO_RURAL_REGISTRY_ANALYTIC_FIELDS
         ),
         "intersection_labels": INTERSECTION_LABELS_ID,
-        # Administrative division unconfirmed for Indonesia — default
-        # labels kept rather than risk the wrong term.
-        "region_label": "Estado",
+        # The API docs (changelog, territoryOptions) map Indonesia's
+        # province to the "state" level; the sub-level is still
+        # unconfirmed, so the default label is kept for it.
+        "region_label": "Província",
         "municipality_label": "Município",
         "has_rural_property_search": False,
         "sources": (

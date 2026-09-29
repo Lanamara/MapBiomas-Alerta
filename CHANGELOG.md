@@ -9,6 +9,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - Rural property search follows the current API: `ruralProperty(propertyCode: ...)` instead of `carCode`, and `propertyType`/`stateAcronym` instead of the deprecated `carType`/`state` (older APIs are still detected and supported).
 - Alert download by rural property uses the `propertyCodes` argument of `alerts` (`carCodes` was removed from the API).
 - Summary query no longer sends `isInEmbargoedArea`, removed from the API in May 2026.
+- Biome, state and municipality no longer depend on the deprecated `crossedBiomes`/`crossedStates`/`crossedCities` fields: they are requested only while the API still has them, and otherwise rebuilt from `alertIntersections` (search, summary and alert details).
+- Indonesia: the region level is labelled "Província" (Provincia/Province), following the API docs.
+- Detection sources whose enum name differs between the API docs and the platform (`ProdesAmz`/`ProdesAmazonia`, `ProdesCerr`/`ProdesCerrado`, `Siradx`/`SiradX`) show their friendly label either way.
 
 ## [1.0.0] - 2026-09
 
