@@ -276,6 +276,37 @@ TRANSLATIONS = {
         ),
         "Código do alerta": "Código de alerta",
         "Código do CAR": "Código de catastro",
+        # Colombia: Catastro Rural (Número Predial Nacional)
+        "Buscar por predio do Catastro Rural": (
+            "Buscar por predio del Catastro Rural"
+        ),
+        "Número predial": "Número predial",
+        "Área em {} (ha)": "Área en {} (ha)",
+        "Número Predial Nacional completo (30 dígitos)": (
+            "Número Predial Nacional completo (30 dígitos)"
+        ),
+        "Busca todos os alertas vinculados ao predio do Catastro Rural, "
+        "usando o Número Predial Nacional de 30 dígitos (ex.: "
+        "851250001000000140014000000000). Essa busca só retorna resultado "
+        "para predios que já têm pelo menos um alerta — um número válido mas"
+        " sem nenhum alerta não gera erro, só não aparece nada.": (
+            "Busca todas las alertas vinculadas al predio del Catastro Rural, "
+            "usando el Número Predial Nacional de 30 dígitos (ej.: "
+            "851250001000000140014000000000). Esta búsqueda solo devuelve "
+            "resultados para predios que ya tienen al menos una alerta: un "
+            "número válido sin ninguna alerta no genera error, simplemente no "
+            "muestra nada."
+        ),
+        "Formato do número predial válido.": (
+            "Formato del número predial válido."
+        ),
+        "Formato inválido. Use os 30 dígitos do número predial.": (
+            "Formato inválido. Use los 30 dígitos del número predial."
+        ),
+        "Número predial reconhecido pela API.": (
+            "Número predial reconocido por la API."
+        ),
+        "Informe o número predial.": "Ingrese el número predial.",
         "Código numérico do alerta": "Código numérico de la alerta",
         "Código completo do CAR/SICAR": "Código completo del catastro",
         "Formato do código CAR válido.": "Formato de código válido.",
@@ -399,6 +430,17 @@ TRANSLATIONS = {
         "OUTROS ALERTAS NOS MESMOS IMÓVEIS: {}": (
             "OTRAS ALERTAS EN LOS MISMOS PREDIOS: {}"
         ),
+        "Atenção: este número soma os alertas de todos os imóveis cruzados, "
+        "de qualquer data, e não apenas os do período da busca. Imóveis "
+        "grandes podem ter muitos alertas. Confira abaixo quantos alertas "
+        "cada imóvel tem (o total inclui o alerta selecionado).": (
+            "Atención: este número suma las alertas de todos los predios "
+            "cruzados, de cualquier fecha, y no solo las del período de la "
+            "búsqueda. Los predios grandes pueden tener muchas alertas. "
+            "Consulte abajo cuántas alertas tiene cada predio (el total "
+            "incluye la alerta seleccionada)."
+        ),
+        "{} alerta(s) no imóvel": "{} alerta(s) en el predio",
         "FECHAR ALERTAS RELACIONADOS": "CERRAR ALERTAS RELACIONADAS",
         "Imagem antes": "Imagen antes",
         "Imagem depois": "Imagen después",
@@ -476,12 +518,10 @@ TRANSLATIONS = {
         "Sem cruzamento": "Sin cruce",
         "Ex.: -47.9292": "Ej.: -47.9292",
         "Ex.: -15.7801": "Ej.: -15.7801",
-        "Disponível apenas quando a consulta é equivalente à da "
-        "plataforma (sem recorte manual do mapa, todas as fontes e "
-        "sem filtro de cruzamento).": (
-            "Disponible solo cuando la búsqueda es equivalente a la de "
-            "la plataforma (sin recorte manual del mapa, todas las "
-            "fuentes y sin filtro de cruce)."
+        "Disponível apenas quando a plataforma consegue aplicar o mesmo "
+        "filtro da busca.": (
+            "Disponible solo cuando la plataforma puede aplicar el mismo "
+            "filtro de la búsqueda."
         ),
         "Não há nota informativa configurada para este país.": (
             "No hay una nota informativa configurada para este país."
@@ -506,6 +546,16 @@ TRANSLATIONS = {
             "(Área Protegida, Territorio Indígena, Asentamiento etc.) "
             "para esta alerta. Los predios rurales cruzados aparecen "
             "en una sección propia, justo abajo."
+        ),
+        "Nenhum cruzamento territorial ou ambiental foi registrado para "
+        "este alerta.": (
+            "No se registró ningún cruce territorial o ambiental para "
+            "esta alerta."
+        ),
+        "Imóveis rurais cruzados aparecem em uma seção própria, logo "
+        "abaixo.": (
+            "Los predios rurales cruzados aparecen en una sección propia, "
+            "justo abajo."
         ),
         "A API deste país não disponibilizou campos de cruzamento "
         "compatíveis.": (
@@ -1255,7 +1305,17 @@ TRANSLATIONS = {
         'Embargos e autorizações: consulte o laudo na plataforma.': 'Embargos y autorizaciones: consulte el informe en la plataforma.',
         'Não foi possível carregar a lista de biomas da API ({}). Use uma camada vetorial do bioma como área de interesse.': 'No fue posible cargar la lista de biomas de la API ({}). Use una capa vectorial del bioma como área de interés.',
         # Summary cards and notices
-        'Este resumo varia de acordo com os filtros selecionados. Com filtro de fonte ou de cruzamento, o resumo oficial da plataforma não corresponde ao que é baixado: os números passam a ser calculados a partir da camada, e média diária, maior velocidade e sobreposições ficam indisponíveis.': 'Este resumen varía según los filtros seleccionados. Con filtro de fuente o de cruce, el resumen oficial de la plataforma no corresponde a lo que se descarga: los números pasan a calcularse a partir de la capa, y el promedio diario, la mayor velocidad y las superposiciones no están disponibles.',
+        "Este resumo varia de acordo com os filtros selecionados. Quando a "
+        "plataforma não consegue aplicar o mesmo filtro (cruzamento, camada "
+        "vetorial, coordenada, ou mais de uma fonte com a regra Todas "
+        "selecionadas juntas ou Combinação exata), alguns números passam a "
+        "ser calculados a partir da camada e outros ficam indisponíveis.": (
+            "Este resumen varía según los filtros seleccionados. Cuando la "
+            "plataforma no puede aplicar el mismo filtro (cruce, capa "
+            "vectorial, coordenada, o más de una fuente con la regla Todas "
+            "seleccionadas juntas o Combinación exacta), algunas cifras se "
+            "calculan a partir de la capa y otras no están disponibles."
+        ),
         'Exportar tabela de atributos (CSV)': 'Exportar tabla de atributos (CSV)',
         'EXPORTAR TABELA DE ATRIBUTOS (CSV)': 'EXPORTAR TABLA DE ATRIBUTOS (CSV)',
         'EXPORTAR INFORMAÇÕES PRINCIPAIS (CSV)': 'EXPORTAR INFORMACIÓN PRINCIPAL (CSV)',
@@ -1346,7 +1406,6 @@ TRANSLATIONS = {
         'ALERTAS DO GRÁFICO (SHP)': 'ALERTAS DEL GRÁFICO (SHP)',
         'As exportações desta aba seguem o recorte da análise (campo e valor escolhidos). A tabela completa da camada é exportada na aba Camadas.': 'Las exportaciones de esta pestaña siguen el recorte del análisis (campo y valor elegidos). La tabla completa de la capa se exporta en la pestaña Capas.',
         'Aplique uma análise para exportar os alertas do gráfico.': 'Aplique un análisis para exportar las alertas del gráfico.',
-        'Outros ({} grupos)': 'Otros ({} grupos)',
         'Indicador': 'Indicador',
         'Valor': 'Valor',
         'Observação': 'Observación',
@@ -1479,6 +1538,34 @@ TRANSLATIONS = {
         ),
         "Código do alerta": "Alert code",
         "Código do CAR": "Cadastre code",
+        # Colombia: Catastro Rural (Número Predial Nacional)
+        "Buscar por predio do Catastro Rural": (
+            "Search by Catastro Rural property"
+        ),
+        "Número predial": "Property number",
+        "Área em {} (ha)": "Area in {} (ha)",
+        "Número Predial Nacional completo (30 dígitos)": (
+            "Full National Property Number (30 digits)"
+        ),
+        "Busca todos os alertas vinculados ao predio do Catastro Rural, "
+        "usando o Número Predial Nacional de 30 dígitos (ex.: "
+        "851250001000000140014000000000). Essa busca só retorna resultado "
+        "para predios que já têm pelo menos um alerta — um número válido mas"
+        " sem nenhum alerta não gera erro, só não aparece nada.": (
+            "Finds every alert linked to the Catastro Rural property, using the "
+            "30-digit National Property Number (Número Predial Nacional, e.g. "
+            "851250001000000140014000000000). This search only returns results "
+            "for properties that already have at least one alert: a valid number"
+            " with no alerts gives no error, it just shows nothing."
+        ),
+        "Formato do número predial válido.": "Valid property number format.",
+        "Formato inválido. Use os 30 dígitos do número predial.": (
+            "Invalid format. Use the 30 digits of the property number."
+        ),
+        "Número predial reconhecido pela API.": (
+            "Property number recognized by the API."
+        ),
+        "Informe o número predial.": "Enter the property number.",
         "Código numérico do alerta": "Numeric alert code",
         "Código completo do CAR/SICAR": "Full cadastre code",
         "Formato do código CAR válido.": "Valid code format.",
@@ -1599,6 +1686,17 @@ TRANSLATIONS = {
         "OUTROS ALERTAS NOS MESMOS IMÓVEIS: {}": (
             "OTHER ALERTS ON THE SAME PROPERTIES: {}"
         ),
+        "Atenção: este número soma os alertas de todos os imóveis cruzados, "
+        "de qualquer data, e não apenas os do período da busca. Imóveis "
+        "grandes podem ter muitos alertas. Confira abaixo quantos alertas "
+        "cada imóvel tem (o total inclui o alerta selecionado).": (
+            "Attention: this number adds up the alerts of all crossed "
+            "properties, from any date, not only those in the search "
+            "period. Large properties may have many alerts. See below how "
+            "many alerts each property has (the total includes the "
+            "selected alert)."
+        ),
+        "{} alerta(s) no imóvel": "{} alert(s) on the property",
         "FECHAR ALERTAS RELACIONADOS": "CLOSE RELATED ALERTS",
         "Imagem antes": "Before image",
         "Imagem depois": "After image",
@@ -1677,12 +1775,10 @@ TRANSLATIONS = {
         "Sem cruzamento": "No crossing",
         "Ex.: -47.9292": "E.g.: -47.9292",
         "Ex.: -15.7801": "E.g.: -15.7801",
-        "Disponível apenas quando a consulta é equivalente à da "
-        "plataforma (sem recorte manual do mapa, todas as fontes e "
-        "sem filtro de cruzamento).": (
-            "Only available when the search matches the platform's "
-            "own (no manual map clipping, all sources, and no "
-            "crossing filter)."
+        "Disponível apenas quando a plataforma consegue aplicar o mesmo "
+        "filtro da busca.": (
+            "Only available when the platform can apply the same filter as "
+            "the search."
         ),
         "Não há nota informativa configurada para este país.": (
             "No informational notice is configured for this country."
@@ -1707,6 +1803,16 @@ TRANSLATIONS = {
             "Area, Indigenous Land, Settlement etc.) was recorded "
             "for this alert. Crossed rural properties appear in "
             "their own section right below."
+        ),
+        "Nenhum cruzamento territorial ou ambiental foi registrado para "
+        "este alerta.": (
+            "No territorial or environmental crossing was recorded for "
+            "this alert."
+        ),
+        "Imóveis rurais cruzados aparecem em uma seção própria, logo "
+        "abaixo.": (
+            "Crossed rural properties appear in their own section right "
+            "below."
         ),
         "A API deste país não disponibilizou campos de cruzamento "
         "compatíveis.": (
@@ -2440,7 +2546,17 @@ TRANSLATIONS = {
         'Embargos e autorizações: consulte o laudo na plataforma.': 'Embargoes and authorizations: see the report on the platform.',
         'Não foi possível carregar a lista de biomas da API ({}). Use uma camada vetorial do bioma como área de interesse.': 'Could not load the list of biomes from the API ({}). Use a vector layer of the biome as the area of interest.',
         # Summary cards and notices
-        'Este resumo varia de acordo com os filtros selecionados. Com filtro de fonte ou de cruzamento, o resumo oficial da plataforma não corresponde ao que é baixado: os números passam a ser calculados a partir da camada, e média diária, maior velocidade e sobreposições ficam indisponíveis.': "This summary depends on the selected filters. With a source or crossing filter, the platform's official summary doesn't match what is downloaded: the figures are computed from the layer, and daily average, highest speed and overlaps are unavailable.",
+        "Este resumo varia de acordo com os filtros selecionados. Quando a "
+        "plataforma não consegue aplicar o mesmo filtro (cruzamento, camada "
+        "vetorial, coordenada, ou mais de uma fonte com a regra Todas "
+        "selecionadas juntas ou Combinação exata), alguns números passam a "
+        "ser calculados a partir da camada e outros ficam indisponíveis.": (
+            "This summary depends on the selected filters. When the platform "
+            "can't apply the same filter (crossing, vector layer, coordinate, "
+            "or more than one source with the rule All selected together or "
+            "Exact combination), some figures are computed from the layer "
+            "and others are unavailable."
+        ),
         'Exportar tabela de atributos (CSV)': 'Export attribute table (CSV)',
         'EXPORTAR TABELA DE ATRIBUTOS (CSV)': 'EXPORT ATTRIBUTE TABLE (CSV)',
         'EXPORTAR INFORMAÇÕES PRINCIPAIS (CSV)': 'EXPORT MAIN INFORMATION (CSV)',
@@ -2531,7 +2647,6 @@ TRANSLATIONS = {
         'ALERTAS DO GRÁFICO (SHP)': 'CHART ALERTS (SHP)',
         'As exportações desta aba seguem o recorte da análise (campo e valor escolhidos). A tabela completa da camada é exportada na aba Camadas.': "Exports in this tab follow the analysis cut (chosen field and value). The layer's full table is exported in the Layers tab.",
         'Aplique uma análise para exportar os alertas do gráfico.': "Apply an analysis to export the chart's alerts.",
-        'Outros ({} grupos)': 'Others ({} groups)',
         'Indicador': 'Indicator',
         'Valor': 'Value',
         'Observação': 'Note',

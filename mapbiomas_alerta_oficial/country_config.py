@@ -27,14 +27,215 @@ BRAZIL_ONLY_CROSSING_FIELDS = (
     "crossedMunicipalityProtectedAreaIntegralProtections",
     "crossedMunicipalityProtectedAreaSustainableUses",
     "crossedSpecialTerritories",
+    # Settlements (INCRA), Legal Reserve and APP come from Brazil's
+    # Forest Code / land reform — confirmed Brazil-only by the MapBiomas
+    # Alerta team.
+    "crossedSettlements",
+    "crossedLegalReservesArea",
+    "crossedPermanentProtectedArea",
+    # Conservation Units (SNUC) and forest management plans: the API
+    # counters are 0 in every other country (checked in the sandboxes of
+    # Bolivia, Colombia, Peru and Indonesia) — protected areas there come
+    # through alertIntersections under their own national categories.
+    "crossedConservationUnits",
+    "crossedForestManagementsArea",
+)
+
+# Brazilian crossings not offered in the plugin (crossing filter, charts,
+# overlap summary): forest management, APP, Legal Reserve and geoparks
+# (river sources are also hidden, see HIDDEN_INTERSECTION_HINTS).
+HIDDEN_BRAZIL_CROSSING_FIELDS = (
+    "crossedForestManagementsArea",
+    "crossedPermanentProtectedArea",
+    "crossedLegalReservesArea",
+    "crossedGeoparks",
+)
+
+# Same categories in the alertIntersections mechanism: the Brazilian type
+# keys weren't confirmed in the sandbox, so they're matched by these
+# fragments of the type key or label (case-insensitive).
+HIDDEN_INTERSECTION_HINTS = (
+    "FOREST_MANAGEMENT", "MANEJO",
+    "PERMANENT_PROTECT", "PRESERVACAO_PERMANENTE", "PRESERVAÇÃO PERMANENTE",
+    "LEGAL_RESERVE", "RESERVA_LEGAL", "RESERVA LEGAL",
+    "GEOPARK", "GEOPARQUE",
+    "RIVER_SOURCE", "NASCENTE", "NACIENTE",
+)
+
+# Rural property registry: Brazil (CAR) and Colombia (cadastre) only,
+# as confirmed by the MapBiomas Alerta team.
+NO_RURAL_REGISTRY_CROSSING_FIELDS = (
+    "ruralPropertiesTotal",
 )
 
 # Not Brazil-specific, but no API summary counter exists to confirm
 # them elsewhere (see MapBiomasApiClient.CROSSING_AVAILABILITY_COUNTS).
-# Restricted to Brazil until a verification method exists.
+# Restricted to Brazil until a verification method exists — neither
+# shows up in the alertIntersections of the other countries either.
 UNVERIFIABLE_CROSSING_FIELDS = (
     "crossedBiosphereReserves",
+    "crossedGeoparks",
 )
+
+# Legacy crossed*/…List fields (layer columns) of the Brazil-only
+# categories above. Outside Brazil they're not requested, so the layer
+# doesn't carry columns that can only ever be empty there.
+BRAZIL_ONLY_ANALYTIC_FIELDS = (
+    # Outside Brazil indigenous territories come through the country's
+    # own crossing types (Resguardo Indígena, Comunidad Nativa…); the
+    # legacy field would repeat them under a Brazilian label.
+    "crossedIndigenousLands",
+    "crossedIndigenousLandsArea",
+    "crossedIndigenousLandsList",
+    "crossedConservationUnits",
+    "crossedConservationUnitsArea",
+    "crossedConservationUnitsList",
+    "crossedSettlements",
+    "crossedSettlementsArea",
+    "crossedSettlementsList",
+    "crossedQuilombos",
+    "crossedQuilombosArea",
+    "crossedQuilombosList",
+    "crossedBiosphereReserves",
+    "crossedBiosphereReservesArea",
+    "crossedForestManagementsActivities",
+    "crossedForestManagementsArea",
+    "crossedForestManagementsList",
+    "crossedFederalProtectedAreaIntegralProtections",
+    "crossedFederalProtectedAreaIntegralProtectionsArea",
+    "crossedFederalProtectedAreaSustainableUses",
+    "crossedFederalProtectedAreaSustainableUsesArea",
+    "crossedStateProtectedAreaIntegralProtections",
+    "crossedStateProtectedAreaIntegralProtectionsArea",
+    "crossedStateProtectedAreaSustainableUses",
+    "crossedStateProtectedAreaSustainableUsesArea",
+    "crossedMunicipalityProtectedAreaIntegralProtections",
+    "crossedMunicipalityProtectedAreaIntegralProtectionsArea",
+    "crossedMunicipalityProtectedAreaSustainableUses",
+    "crossedMunicipalityProtectedAreaSustainableUsesArea",
+    "crossedPermanentProtectedArea",
+    "crossedPermanentProtectedAreaTotal",
+    "crossedPermanentProtectedAreaList",
+    "crossedLegalReservesArea",
+    "crossedLegalReservesTotal",
+    "crossedLegalReservesList",
+    "crossedSpecialTerritories",
+    "crossedSpecialTerritoriesArea",
+    "crossedGeoparks",
+    "crossedGeoparksArea",
+)
+
+NO_RURAL_REGISTRY_ANALYTIC_FIELDS = (
+    "ruralPropertiesCodes",
+    "ruralPropertiesTotal",
+)
+
+# Labels for the alertIntersections types of each country. The API's
+# "name" field holds the data source (e.g. "IBC", "SERNANP", "ANA"),
+# not a label, so the plugin needs its own. Terms are the ones used in
+# each country and aren't translated with the panel language. Types
+# confirmed in the sandbox of each country (sample of 300 alerts); an
+# unknown type falls back to its own key.
+# Territorial context types: they cross (nearly) every alert, so they're
+# kept as crossings (filter, Details tab) but left out of the overlap
+# summary count.
+INTERSECTION_CONTEXT_TYPES = frozenset((
+    "COUNTRY",
+    "DEPARTMENT",
+    "PROVINCE",
+    "DISTRICT",
+    "MUNICIPALITY",
+    "REGION",
+    "BIOME",
+    "ECOREGION",
+    "ECOZONE",
+    "ISLAND",
+    "WATERSHED",
+    "WATERSHED_LEVEL_1",
+    "WATERSHED_LEVEL_2",
+    "WATERSHED_LEVEL_3",
+    "WATERSHED_LEVEL_4",
+))
+
+INTERSECTION_LABELS_PE = {
+    "COUNTRY": "País",
+    "DEPARTMENT": "Departamento",
+    "PROVINCE": "Provincia",
+    "DISTRICT": "Distrito",
+    "AMAZONIA_REGION": "Región Amazónica",
+    "ECOZONE": "Ecozona",
+    "WATERSHED_LEVEL_1": "Cuenca hidrográfica (nivel 1)",
+    "WATERSHED_LEVEL_2": "Cuenca hidrográfica (nivel 2)",
+    "WATERSHED_LEVEL_3": "Cuenca hidrográfica (nivel 3)",
+    "WATERSHED_LEVEL_4": "Cuenca hidrográfica (nivel 4)",
+    "NATURAL_PROTECTED_AREA": "Área Natural Protegida",
+    "BUFFER_ZONE": "Zona de Amortiguamiento",
+    "NATIVE_TITLED_COMMUNITY": "Comunidad Nativa Titulada",
+    "TITLED_PEASANT_COMMUNITY": "Comunidad Campesina Titulada",
+    "INDIGENOUS_RESERVE": "Reserva Indígena",
+    "TITLE_OR_EXPANSION_REQUEST": "Solicitud de Titulación o Ampliación",
+}
+INTERSECTION_LABELS_BO = {
+    "COUNTRY": "País",
+    "DEPARTMENT": "Departamento",
+    "MUNICIPALITY": "Municipio",
+    "REGION": "Región",
+    "BIOME": "Bioma",
+    "ECOREGION": "Ecorregión",
+    "NATIONAL_PROTECTED_AREA": "Área Protegida Nacional",
+    "SUBNATIONAL_PROTECTED_AREA": "Área Protegida Subnacional",
+    "INDIGENOUS_TERRITORY": "Territorio Indígena",
+    "RAMSAR_SITE": "Sitio Ramsar",
+}
+INTERSECTION_LABELS_CO = {
+    "COUNTRY": "País",
+    "DEPARTMENT": "Departamento",
+    "MUNICIPALITY": "Municipio",
+    "REGION": "Región",
+    "BIOME": "Bioma",
+    "WATERSHED_LEVEL_1": "Cuenca hidrográfica (nivel 1)",
+    "WATERSHED_LEVEL_2": "Cuenca hidrográfica (nivel 2)",
+    "WATERSHED_LEVEL_3": "Cuenca hidrográfica (nivel 3)",
+    "NATIONAL_NATURAL_PROTECTED_AREA": "Área Natural Protegida Nacional",
+    "DEPARTMENTAL_NATURAL_PROTECTED_AREA": (
+        "Área Natural Protegida Departamental"
+    ),
+    "INDIGENOUS_RESERVE": "Resguardo Indígena",
+    "COMMUNITY_COUNCIL": "Consejo Comunitario",
+    "FOREST_RESERVE": "Reserva Forestal",
+    "PEASANT_RESERVE_ZONE": "Zona de Reserva Campesina",
+    "RAMSAR_SITES": "Sitio Ramsar",
+    "TPR": "Catastro Rural",
+    "RAISG_LIMIT": "Límite Amazónico (RAISG)",
+    "CHOCO_BIOGEOGRAPHIC": "Chocó Biogeográfico",
+    "TROPICAL_DRY_FOREST": "Bosque Seco Tropical",
+}
+INTERSECTION_LABELS_ID = {
+    "PROVINCE": "Province",
+    "DISTRICT": "District",
+    "ISLAND": "Island",
+    "WATERSHED": "Watershed",
+    "NATIONAL_PARK": "National Park",
+    "FOREST_MORATORIUM": "Forest Moratorium Area",
+    "KEY_BIODIVERSITY_AREA": "Key Biodiversity Area",
+}
+
+def intersection_group_fields(labels):
+    """[(type, field, label)] for the crossing types that get their own
+    layer columns (names, total area and per-territory areas), so charts
+    can compare territories of each type. Context types (country,
+    department, watersheds…) are left out, as in the overlap summary.
+    Fields are numbered in table order (Cz01, Cz02…) to stay short and
+    stable for Shapefile exports."""
+    items = [
+        (type_key, label) for type_key, label in (labels or {}).items()
+        if type_key not in INTERSECTION_CONTEXT_TYPES
+    ]
+    return [
+        (type_key, "Cz%02d" % (index + 1), label)
+        for index, (type_key, label) in enumerate(items)
+    ]
+
 
 COMMON_FIELDS = {
     "alert_code": "CodeAlerta",
@@ -60,7 +261,14 @@ COUNTRIES = {
         # Empty = nothing excluded; every category in
         # MapBiomasApiClient.CROSSING_OPTIONS is available (already
         # confirmed against Brazil's API during development).
-        "crossing_fields_exclude": (),
+        # Left out of the crossing filter and the charts (decided with
+        # the MapBiomas Alerta team).
+        "crossing_fields_exclude": HIDDEN_BRAZIL_CROSSING_FIELDS,
+        # Embargoes, authorizations and inspection actions are only
+        # crossed in Brazil (none in the alertIntersections of the other
+        # countries): the "check them in the report" note only shows here.
+        "has_embargo_crossings": True,
+        "analytic_fields_exclude": (),
         # UI labels for the two administrative levels the API always
         # returns (internal fields "Estado"/"Municipio", which don't
         # change name — only the text shown to the user varies by
@@ -122,7 +330,13 @@ COUNTRIES = {
         # is discovered via introspection.
         "crossing_fields_exclude": (
             BRAZIL_ONLY_CROSSING_FIELDS + UNVERIFIABLE_CROSSING_FIELDS
+            + NO_RURAL_REGISTRY_CROSSING_FIELDS
         ),
+        "analytic_fields_exclude": (
+            BRAZIL_ONLY_ANALYTIC_FIELDS
+            + NO_RURAL_REGISTRY_ANALYTIC_FIELDS
+        ),
+        "intersection_labels": INTERSECTION_LABELS_BO,
         # Confirmed via Bolivia's official data dictionary.
         "region_label": "Departamento",
         "municipality_label": "Município",
@@ -145,12 +359,19 @@ COUNTRIES = {
         "crossing_fields_exclude": (
             BRAZIL_ONLY_CROSSING_FIELDS + UNVERIFIABLE_CROSSING_FIELDS
         ),
+        "analytic_fields_exclude": (
+            BRAZIL_ONLY_ANALYTIC_FIELDS
+        ),
+        "intersection_labels": INTERSECTION_LABELS_CO,
         # Confirmed via Colombia's official data dictionary.
         "region_label": "Departamento",
         "municipality_label": "Município",
-        # Cadastre-code search (ruralProperty query) is not equivalent
-        # to Brazil's here — disabled until confirmed.
-        "has_rural_property_search": False,
+        # Cadastre-code search: the ruralProperty query takes Colombia's
+        # 30-digit Número Predial Nacional (confirmed in the sandbox,
+        # e.g. 851250001000000140014000000000). The layer is called
+        # "Catastro Rural" there (label of the TPR intersection type).
+        "has_rural_property_search": True,
+        "rural_property_code_pattern": r"\d{30}",
         "sources": (
             ("Dist", "DIST"),
             ("Gaia", "GAIA"),
@@ -173,7 +394,13 @@ COUNTRIES = {
         # Same logic as "BO"/"CO" above.
         "crossing_fields_exclude": (
             BRAZIL_ONLY_CROSSING_FIELDS + UNVERIFIABLE_CROSSING_FIELDS
+            + NO_RURAL_REGISTRY_CROSSING_FIELDS
         ),
+        "analytic_fields_exclude": (
+            BRAZIL_ONLY_ANALYTIC_FIELDS
+            + NO_RURAL_REGISTRY_ANALYTIC_FIELDS
+        ),
+        "intersection_labels": INTERSECTION_LABELS_PE,
         # "Departamento" confirmed; the sub-level ("Município") is an
         # approximation — Peru has Provincia and Distrito below it and
         # it's unclear which the API field actually fills.
@@ -196,7 +423,13 @@ COUNTRIES = {
         # Same logic as "BO"/"CO" above.
         "crossing_fields_exclude": (
             BRAZIL_ONLY_CROSSING_FIELDS + UNVERIFIABLE_CROSSING_FIELDS
+            + NO_RURAL_REGISTRY_CROSSING_FIELDS
         ),
+        "analytic_fields_exclude": (
+            BRAZIL_ONLY_ANALYTIC_FIELDS
+            + NO_RURAL_REGISTRY_ANALYTIC_FIELDS
+        ),
+        "intersection_labels": INTERSECTION_LABELS_ID,
         # Administrative division unconfirmed for Indonesia — default
         # labels kept rather than risk the wrong term.
         "region_label": "Estado",
